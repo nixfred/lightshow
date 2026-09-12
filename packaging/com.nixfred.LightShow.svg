@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- LightShow: four keyboard zones lit in a spectrum, on a dark board.
+       Mirrors what the app actually controls: four zone groups, not keys. -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%"   stop-color="#7aa2f7"/>
+      <stop offset="45%"  stop-color="#bb9af7"/>
+      <stop offset="100%" stop-color="#ff7ac6"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2.4" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- board, with the Omarchy chamfer on two corners -->
+  <path d="M10 12 H56 V46 L50 52 H8 V18 Z" fill="#12141d" stroke="#2a2f42" stroke-width="1.5"/>
+
+  <!-- the four zones, left to right: wasd, alpha, nav, numpad -->
+  <g filter="url(#glow)">
+    <rect x="14" y="21" width="8"  height="22" rx="2" fill="#7aa2f7"/>
+    <rect x="24" y="21" width="16" height="22" rx="2" fill="url(#g)"/>
+    <rect x="42" y="21" width="6"  height="22" rx="2" fill="#bb9af7"/>
+    <rect x="50" y="21" width="4"  height="22" rx="2" fill="#ff7ac6" opacity=".85"/>
+  </g>
+</svg>

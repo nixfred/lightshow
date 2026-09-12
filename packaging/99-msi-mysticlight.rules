@@ -1,0 +1,8 @@
+# MSI MysticLight keyboard LED controllers (LightShow).
+# Two vendor IDs are used across the family: 0db0 and 1462.
+# GROUP=wheel rather than input: a wheel member already has sudo, so this
+# grants no privilege that was not there, and needs no re-login.
+# These hidraw nodes are the LED microcontroller, NOT the key input device,
+# so write access here cannot be used to read keystrokes.
+KERNEL=="hidraw*", ATTRS{idVendor}=="0db0", MODE="0660", GROUP="wheel"
+KERNEL=="hidraw*", ATTRS{idVendor}=="1462", MODE="0660", GROUP="wheel"

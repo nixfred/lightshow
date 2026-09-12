@@ -1,0 +1,13 @@
+[Desktop Entry]
+Name=LightShow
+Comment=Control the keyboard RGB: presets, colours, day and night profiles, theme matching
+Exec=@EXEC@
+TryExec=@EXEC@
+Icon=com.nixfred.LightShow
+Terminal=false
+Type=Application
+Categories=Settings;HardwareSettings;
+Keywords=lightshow;rgb;keyboard;backlight;led;colour;color;lighting;mysticlight;msi;codedark;
+StartupNotify=true
+StartupWMClass=com.nixfred.LightShow
+SingleMainWindow=true

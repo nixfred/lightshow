@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 620" width="1200" height="620" role="img" aria-label="The twenty LightShow effects">
+  <defs>
+    <style>
+      .n { font-family: "JetBrains Mono", DejaVu Sans Mono, monospace;
+           font-size: 13px; font-weight: 700; fill: #c8cfe6; letter-spacing: 1px; }
+      .d { font-family: "JetBrains Mono", DejaVu Sans Mono, monospace;
+           font-size: 10.5px; fill: #7b86a6; }
+      .t { font-family: "JetBrains Mono", DejaVu Sans Mono, monospace;
+           font-size: 11px; fill: #6b748f; letter-spacing: 3px; }
+    </style>
+  </defs>
+  <rect width="1200" height="620" fill="#0b0c12"/>
+
+  <text x="28" y="34" class="t">SOFTWARE EFFECTS — each zone painted separately, motion across the board</text>
+
+  <!-- Each row: four swatches = the four zones at one instant of that effect. -->
+  <g id="rows">
+    <!-- fireworks -->
+    <g transform="translate(28,52)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#1a0a06"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#ffffff"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#ff8a3d"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#3a1408"/>
+      <text x="246" y="15" class="n">FIREWORKS</text>
+      <text x="246" y="30" class="d">bursts flash white, then sparkle down to dark</text>
+    </g>
+    <!-- waterfall -->
+    <g transform="translate(28,98)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#eaf6ff"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#7fc8ec"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#2d6f96"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#0e2a3d"/>
+      <text x="246" y="15" class="n">WATERFALL</text>
+      <text x="246" y="30" class="d">a cascade pouring across, foam at the head</text>
+    </g>
+    <!-- ember -->
+    <g transform="translate(28,144)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#3c0600"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#a83208"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#ff9614"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#6b1400"/>
+      <text x="246" y="15" class="n">EMBER</text>
+      <text x="246" y="30" class="d">banked coals breathing, with sudden flares</text>
+    </g>
+    <!-- matrix -->
+    <g transform="translate(28,190)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#031a06"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#00ff46"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#c8ffc8"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#046b1c"/>
+      <text x="246" y="15" class="n">MATRIX</text>
+      <text x="246" y="30" class="d">green rain, bright heads, decaying trails</text>
+    </g>
+    <!-- lightning -->
+    <g transform="translate(28,236)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#ffffff"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#11162e"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#ffffff"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#151b38"/>
+      <text x="246" y="15" class="n">LIGHTNING</text>
+      <text x="246" y="30" class="d">dark, then a multi-strike flash and afterglow</text>
+    </g>
+    <!-- tide -->
+    <g transform="translate(28,282)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#12406b"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#2f7fb8"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#8fd3f0"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#2a6f9e"/>
+      <text x="246" y="15" class="n">TIDE</text>
+      <text x="246" y="30" class="d">a slow swell washing in and back out</text>
+    </g>
+
+    <!-- right column -->
+    <g transform="translate(620,52)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#ff0000"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#ff0000"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#000000"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#000000"/>
+      <text x="246" y="15" class="n">POLICE</text>
+      <text x="246" y="30" class="d">red and blue strobe. obnoxious on purpose</text>
+    </g>
+    <g transform="translate(620,98)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#ff3cb4"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#963cff"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#3cf0ff"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#963cff"/>
+      <text x="246" y="15" class="n">VAPOR</text>
+      <text x="246" y="30" class="d">hot pink and cyan sliding over each other</text>
+    </g>
+    <g transform="translate(620,144)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#ff2b2b"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#7a1010"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#2b0505"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#120202"/>
+      <text x="246" y="15" class="n">SCANNER</text>
+      <text x="246" y="30" class="d">one eye sweeping back and forth with a trail</text>
+    </g>
+    <g transform="translate(620,190)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#ff0044"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#ffd500"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#00e5ff"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#8a00ff"/>
+      <text x="246" y="15" class="n">RAINBOW</text>
+      <text x="246" y="30" class="d">full-spectrum chase, ignores the theme</text>
+    </g>
+    <g transform="translate(620,236)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+      <text x="246" y="15" class="n">HEARTBEAT</text>
+      <text x="246" y="30" class="d">lub-dub, pause, in the theme accent</text>
+    </g>
+    <g transform="translate(620,282)">
+      <rect x="0"   y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+      <rect x="58"  y="0" width="52" height="34" rx="4" fill="#000000"/>
+      <rect x="116" y="0" width="52" height="34" rx="4" fill="#000000"/>
+      <rect x="174" y="0" width="52" height="34" rx="4" fill="#000000"/>
+      <text x="246" y="15" class="n">CODEDARK</text>
+      <text x="246" y="30" class="d">only the highlight keys lit, rest held down</text>
+    </g>
+  </g>
+
+  <line x1="28" y1="348" x2="1172" y2="348" stroke="#242838" stroke-width="1"/>
+  <text x="28" y="378" class="t">ALSO SOFTWARE — aurora · scroll · gamer</text>
+
+  <text x="28" y="432" class="t">HARDWARE EFFECTS — run on the keyboard's own MCU, zero CPU, survive exit</text>
+
+  <g transform="translate(28,450)">
+    <rect x="0"   y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <rect x="58"  y="0" width="52" height="34" rx="4" fill="#9a90f5"/>
+    <rect x="116" y="0" width="52" height="34" rx="4" fill="#bb9af7"/>
+    <rect x="174" y="0" width="52" height="34" rx="4" fill="#d48ae8"/>
+    <text x="246" y="15" class="n">WAVE</text>
+    <text x="246" y="30" class="d">the palette travelling across the zones</text>
+  </g>
+  <g transform="translate(28,496)">
+    <rect x="0"   y="0" width="52" height="34" rx="4" fill="#20283f"/>
+    <rect x="58"  y="0" width="52" height="34" rx="4" fill="#3f5a96"/>
+    <rect x="116" y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <rect x="174" y="0" width="52" height="34" rx="4" fill="#3f5a96"/>
+    <text x="246" y="15" class="n">BREATHE</text>
+    <text x="246" y="30" class="d">a slow swell on the theme accent</text>
+  </g>
+  <g transform="translate(620,450)">
+    <rect x="0"   y="0" width="52" height="34" rx="4" fill="#9ece6a"/>
+    <rect x="58"  y="0" width="52" height="34" rx="4" fill="#e0af68"/>
+    <rect x="116" y="0" width="52" height="34" rx="4" fill="#f7768e"/>
+    <rect x="174" y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <text x="246" y="15" class="n">CYCLE</text>
+    <text x="246" y="30" class="d">the whole palette in rotation</text>
+  </g>
+  <g transform="translate(620,496)">
+    <rect x="0"   y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <rect x="58"  y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <rect x="116" y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <rect x="174" y="0" width="52" height="34" rx="4" fill="#7aa2f7"/>
+    <text x="246" y="15" class="n">STATIC</text>
+    <text x="246" y="30" class="d">one solid colour</text>
+  </g>
+
+  <text x="28" y="570" class="d">Each row shows the four zones at one instant. Left to right: WASD · main block · nav · numpad.</text>
+  <text x="28" y="592" class="d">Colours shown are Tokyo Night; every theme-aware effect follows whatever Omarchy theme is active.</text>
+</svg>

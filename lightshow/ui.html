@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LightShow for Omarchy</title>
+<style>
+  :root{
+    --bg:#0b0c12; --panel:#12141d; --panel2:#171a26; --line:#242838;
+    --fg:#c8cfe6; --dim:#6b748f; --accent:#7aa2f7; --accent2:#bb9af7;
+    --chamfer:10px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:
+      radial-gradient(900px 500px at 15% -10%, #1b2140 0%, transparent 60%),
+      radial-gradient(700px 400px at 95% 0%, #2a1440 0%, transparent 55%),
+      var(--bg);
+    color:var(--fg); font:14px/1.5 "JetBrains Mono","Fira Code",ui-monospace,monospace;
+    min-height:100vh; padding:20px 16px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  /* The Omarchy chamfer: a bevelled corner, used on every surface. */
+  .cham{clip-path:polygon(var(--chamfer) 0,100% 0,100% calc(100% - var(--chamfer)),calc(100% - var(--chamfer)) 100%,0 100%,0 var(--chamfer))}
+
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  h1{font-size:22px;margin:0;letter-spacing:.16em;text-transform:uppercase;
+     background:linear-gradient(92deg,var(--accent),var(--accent2) 60%,#ff7ac6);
+     -webkit-background-clip:text;background-clip:text;color:transparent;
+     text-shadow:0 0 34px rgba(122,162,247,.25)}
+  .meta{color:var(--dim);font-size:12px}
+  .meta b{color:var(--accent);font-weight:500}
+
+  section{background:var(--panel);border:1px solid var(--line);padding:16px;margin-bottom:16px}
+  h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
+     margin:0 0 12px;font-weight:600}
+
+  /* live zone preview */
+  .kbd{display:grid;grid-template-columns:1fr 2.2fr 1fr 1.2fr;gap:8px;margin-bottom:6px}
+  .zone{height:78px;border:1px solid var(--line);display:flex;flex-direction:column;
+        justify-content:flex-end;padding:8px;position:relative;overflow:hidden;
+        transition:background .12s linear,box-shadow .12s linear}
+  .zone span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;
+             color:#0009;font-weight:700;mix-blend-mode:difference;filter:invert(1)}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(178px,1fr));gap:10px}
+  .fx{background:var(--panel2);border:1px solid var(--line);padding:11px 12px;
+      cursor:pointer;text-align:left;color:var(--fg);font:inherit;transition:.14s}
+  .fx:hover{border-color:var(--accent);transform:translateY(-2px);
+            box-shadow:0 8px 22px -10px var(--accent)}
+  .fx.on{border-color:var(--accent);background:linear-gradient(150deg,#1d2440,#171a26);
+         box-shadow:0 0 0 1px var(--accent),0 10px 30px -12px var(--accent)}
+  .fx .n{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px}
+  .fx .d{color:var(--dim);font-size:11px;margin-top:3px;line-height:1.35}
+  .fx .k{font-size:9px;color:var(--accent2);letter-spacing:.14em;margin-top:6px;
+         text-transform:uppercase;opacity:.75}
+
+  .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .row + .row{margin-top:12px}
+  label{color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+
+  button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
+         font:inherit;font-size:12px;padding:8px 14px;cursor:pointer;transition:.14s}
+  button:hover{border-color:var(--accent);color:#fff}
+  button.primary{background:linear-gradient(96deg,var(--accent),var(--accent2));
+                 color:#0b0c12;font-weight:700;border:0}
+  button.danger:hover{border-color:#f7768e;color:#f7768e}
+
+  input[type=text],input[type=time]{background:#0c0e16;border:1px solid var(--line);
+    color:var(--fg);font:inherit;font-size:12px;padding:7px 10px}
+  input[type=color]{width:46px;height:32px;padding:0;border:1px solid var(--line);
+    background:#0c0e16;cursor:pointer}
+  input[type=range]{accent-color:var(--accent);width:190px}
+
+  .sw{width:26px;height:26px;border:1px solid #0006;cursor:pointer;transition:.12s}
+  .sw:hover{transform:scale(1.18);border-color:#fff}
+  .swatches{display:flex;flex-wrap:wrap;gap:5px}
+
+  .chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);
+        border:1px solid var(--line);padding:6px 10px;font-size:12px}
+  .chip button{padding:2px 7px;font-size:11px;background:transparent;border:0;color:var(--dim)}
+  .chip button:hover{color:#f7768e}
+  .chip .dot{width:10px;height:10px;border-radius:50%}
+
+  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+  .toggle input{accent-color:var(--accent);width:16px;height:16px}
+
+  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:760px){.cols{grid-template-columns:1fr}.kbd{grid-template-columns:1fr 1fr}}
+  .note{color:var(--dim);font-size:11px;line-height:1.5;margin-top:10px;
+        border-left:2px solid var(--line);padding-left:10px}
+  .empty{color:var(--dim);font-size:12px;font-style:italic}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>LightShow</h1>
+    <div class="meta">
+      for Omarchy &nbsp;·&nbsp; theme <b id="theme">…</b>
+      &nbsp;·&nbsp; <span id="device">…</span>
+      &nbsp;·&nbsp; <span id="prof"></span>
+    </div>
+  </header>
+
+  <section class="cham">
+    <h2>Live zones</h2>
+    <div class="kbd">
+      <div class="zone cham" id="z0"><span>WASD</span></div>
+      <div class="zone cham" id="z1"><span>Main block</span></div>
+      <div class="zone cham" id="z2"><span>Nav / arrows</span></div>
+      <div class="zone cham" id="z3"><span>Numpad</span></div>
+    </div>
+    <div class="note">
+      Four zone groups is everything the MS-1801 controller exposes. Individual
+      keys cannot be addressed, so this preview is the real resolution of the
+      hardware, not a simplification.
+    </div>
+  </section>
+
+  <section class="cham">
+    <h2>Effects</h2>
+    <div class="grid" id="fx"></div>
+  </section>
+
+  <div class="cols">
+    <section class="cham">
+      <h2>Colour</h2>
+      <div class="row">
+        <label class="toggle">
+          <input type="checkbox" id="useTheme"> Match Omarchy theme
+        </label>
+      </div>
+      <div class="row" id="customRow">
+        <label>Custom</label>
+        <span id="pickers"></span>
+        <button id="addCol">+ colour</button>
+        <button id="delCol">− colour</button>
+      </div>
+      <div class="row">
+        <label>Theme palette</label>
+      </div>
+      <div class="swatches" id="palette"></div>
+      <div class="note" id="themeNote"></div>
+    </section>
+
+    <section class="cham">
+      <h2>Controls</h2>
+      <div class="row">
+        <label>Speed</label>
+        <input type="range" id="speed" min="0.1" max="3" step="0.05">
+        <span id="speedV" class="meta"></span>
+      </div>
+      <div class="row">
+        <label>Brightness</label>
+        <input type="range" id="bright" min="0.05" max="1" step="0.05">
+        <span id="brightV" class="meta"></span>
+      </div>
+      <div class="row">
+        <label>Scroll text</label>
+        <input type="text" id="word" maxlength="24" placeholder="OMARCHY">
+        <button id="doScroll">Scroll it</button>
+      </div>
+      <div class="note">
+        Scroll text shows one travelling pulse per letter. With four zones the
+        letters cannot be drawn as shapes, so you are watching the word's rhythm
+        cross the keyboard.
+      </div>
+    </section>
+  </div>
+
+  <section class="cham">
+    <h2>Favourites</h2>
+    <div class="row">
+      <input type="text" id="favName" placeholder="name this look">
+      <button class="primary" id="favSave">Save current</button>
+    </div>
+    <div class="row" id="favList"></div>
+  </section>
+
+  <section class="cham">
+    <h2>Day &amp; Night</h2>
+    <div class="row">
+      <button id="loadDay">☀ Load day</button>
+      <button id="saveDay">Save current as day</button>
+      <button id="loadNight">☾ Load night</button>
+      <button id="saveNight">Save current as night</button>
+    </div>
+    <div class="row">
+      <label class="toggle"><input type="checkbox" id="schedOn"> Auto-switch</label>
+      <label>Day at</label><input type="time" id="dayAt">
+      <label>Night at</label><input type="time" id="nightAt">
+      <button id="schedSave">Apply schedule</button>
+    </div>
+    <div class="note">
+      Auto-switch checks every 20 seconds and applies whichever profile the
+      clock falls into. A night profile at low brightness keeps the board
+      readable without lighting the room.
+    </div>
+  </section>
+
+</div>
+
+<script>
+let S = null;           // last server snapshot
+let local = {};         // pending edits before they are pushed
+
+const $ = id => document.getElementById(id);
+
+async function api(path, body){
+  const r = await fetch(path, {
+    method: body ? 'POST' : 'GET',
+    headers: {'Content-Type':'application/json'},
+    body: body ? JSON.stringify(body) : undefined
+  });
+  return r.json();
+}
+
+async function refresh(){
+  S = await api('/api/state');
+  local = Object.assign({}, S.current);
+  render();
+}
+
+function push(patch){
+  Object.assign(local, patch);
+  renderPreviewGuess();
+  api('/api/apply', local).then(r => { if(r.current){ local = r.current; } render(); });
+}
+
+// ---- rendering -------------------------------------------------------
+
+function render(){
+  $('theme').textContent = S.theme;
+  $('device').textContent = S.device || 'no device';
+  $('prof').textContent = S.active_profile ? ('profile: ' + S.active_profile) : '';
+
+  // effects
+  const fx = $('fx'); fx.innerHTML = '';
+  S.effects.forEach(e => {
+    const b = document.createElement('button');
+    b.className = 'fx cham' + (e.name === local.effect ? ' on' : '');
+    b.innerHTML = `<div class="n">${e.name}</div><div class="d">${e.desc}</div>
+                   <div class="k">${e.kind}</div>`;
+    b.onclick = () => push({effect: e.name});
+    fx.appendChild(b);
+  });
+
+  // colour
+  $('useTheme').checked = !!local.use_theme;
+  $('customRow').style.opacity = local.use_theme ? .4 : 1;
+  const pk = $('pickers'); pk.innerHTML = '';
+  (local.colors || []).forEach((c, i) => {
+    const inp = document.createElement('input');
+    inp.type = 'color'; inp.value = c;
+    inp.oninput = () => { const cols = local.colors.slice(); cols[i] = inp.value;
+                          push({colors: cols, use_theme: false}); };
+    pk.appendChild(inp);
+  });
+
+  const pal = $('palette'); pal.innerHTML = '';
+  Object.entries(S.theme_palette || {}).forEach(([name, hex]) => {
+    const d = document.createElement('div');
+    d.className = 'sw cham'; d.style.background = hex; d.title = name + ' ' + hex;
+    d.onclick = () => push({colors:[hex], use_theme:false});
+    pal.appendChild(d);
+  });
+  $('themeNote').textContent = local.use_theme
+    ? 'Following ' + S.theme + '. Switch your Omarchy theme and these colours follow.'
+    : 'Using your custom colours. Click a palette swatch or tick Match theme to go back.';
+
+  // sliders
+  $('speed').value = local.speed;   $('speedV').textContent  = (+local.speed).toFixed(2) + '×';
+  $('bright').value = local.brightness; $('brightV').textContent = Math.round(local.brightness*100) + '%';
+  $('word').value = local.word || '';
+
+  // favourites
+  const fl = $('favList'); fl.innerHTML = '';
+  const favs = Object.entries(S.favorites || {});
+  if(!favs.length){ fl.innerHTML = '<span class="empty">No favourites saved yet.</span>'; }
+  favs.forEach(([name, st]) => {
+    const c = document.createElement('span'); c.className = 'chip cham';
+    const dot = document.createElement('span'); dot.className = 'dot';
+    dot.style.background = (st.colors && st.colors[0]) || '#7aa2f7';
+    const lbl = document.createElement('button');
+    lbl.textContent = name + '  (' + st.effect + ')';
+    lbl.style.color = 'var(--fg)';
+    lbl.onclick = () => api('/api/favorite/load', {name}).then(refresh);
+    const del = document.createElement('button');
+    del.textContent = '✕';
+    del.onclick = () => api('/api/favorite/delete', {name}).then(refresh);
+    c.append(dot, lbl, del); fl.appendChild(c);
+  });
+
+  // schedule
+  const sc = S.schedule || {};
+  $('schedOn').checked = !!sc.enabled;
+  $('dayAt').value = sc.day_at || '07:00';
+  $('nightAt').value = sc.night_at || '20:00';
+
+  paintPreview(S.resolved_colors);
+}
+
+// The preview shows the palette in play; software effects animate on the
+// hardware faster than we would want to poll, so this is a colour key rather
+// than a frame-accurate mirror.
+function paintPreview(cols){
+  for(let i=0;i<4;i++){
+    const el = $('z'+i);
+    const c = cols[i % cols.length] || '#222';
+    el.style.background = c;
+    el.style.boxShadow = 'inset 0 0 40px -6px #000, 0 0 26px -8px ' + c;
+  }
+}
+function renderPreviewGuess(){
+  if(local.use_theme) return;
+  paintPreview(local.colors && local.colors.length ? local.colors : ['#7aa2f7']);
+}
+
+// ---- wiring ----------------------------------------------------------
+
+$('useTheme').onchange = e => push({use_theme: e.target.checked});
+$('addCol').onclick = () => { const c=(local.colors||[]).slice(); c.push('#ff7ac6');
+                              push({colors:c, use_theme:false}); };
+$('delCol').onclick = () => { const c=(local.colors||[]).slice();
+                              if(c.length>1){ c.pop(); push({colors:c, use_theme:false}); } };
+$('speed').oninput  = e => { $('speedV').textContent=(+e.target.value).toFixed(2)+'×'; };
+$('speed').onchange = e => push({speed: parseFloat(e.target.value)});
+$('bright').oninput  = e => { $('brightV').textContent=Math.round(e.target.value*100)+'%'; };
+$('bright').onchange = e => push({brightness: parseFloat(e.target.value)});
+$('doScroll').onclick = () => push({effect:'scroll', word: $('word').value || 'OMARCHY'});
+
+$('favSave').onclick = async () => {
+  const name = $('favName').value.trim();
+  if(!name){ $('favName').focus(); return; }
+  await api('/api/favorite/save', {name});
+  $('favName').value = ''; refresh();
+};
+
+$('saveDay').onclick   = () => api('/api/profile/save', {which:'day'}).then(refresh);
+$('saveNight').onclick = () => api('/api/profile/save', {which:'night'}).then(refresh);
+$('loadDay').onclick   = () => api('/api/profile/load', {which:'day'}).then(refresh);
+$('loadNight').onclick = () => api('/api/profile/load', {which:'night'}).then(refresh);
+$('schedSave').onclick = () => api('/api/schedule', {
+  enabled: $('schedOn').checked,
+  day_at: $('dayAt').value,
+  night_at: $('nightAt').value
+}).then(refresh);
+
+refresh();
+setInterval(() => { if(document.hasFocus()) refresh(); }, 15000);
+</script>
+</body>
+</html>
