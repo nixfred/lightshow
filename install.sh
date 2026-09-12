@@ -14,6 +14,7 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN="$HOME/.local/bin"
 APPS="$HOME/.local/share/applications"
 ICONS="$HOME/.local/share/icons/hicolor/scalable/apps"
+UNITS="$HOME/.config/systemd/user"
 UDEV=/etc/udev/rules.d/99-msi-mysticlight.rules
 DESKTOP="$APPS/com.nixfred.LightShow.desktop"
 LAUNCHER="$BIN/lightshow"
@@ -22,6 +23,12 @@ say()  { printf '  %s\n' "$*"; }
 warn() { printf '  !! %s\n' "$*" >&2; }
 
 uninstall() {
+  if systemctl --user list-unit-files lightshow.service >/dev/null 2>&1; then
+    systemctl --user disable --now lightshow.service 2>/dev/null || true
+    rm -f "$UNITS/lightshow.service"
+    systemctl --user daemon-reload 2>/dev/null || true
+    say "removed the background service"
+  fi
   rm -f "$LAUNCHER" "$DESKTOP" "$ICONS/com.nixfred.LightShow.svg"
   say "removed launcher, desktop entry and icon"
   if [[ -f $UDEV ]]; then
@@ -92,6 +99,24 @@ else
   else
     warn "could not install the udev rule; run LightShow with sudo instead"
   fi
+fi
+
+# -- background service -------------------------------------------------
+# Effects that animate across the zones are stepped from userspace, so
+# something must stay alive for them to run. The service also keeps the
+# keyboard following the desktop theme without the window being open.
+if command -v systemctl >/dev/null && [[ -d /run/systemd/system || -n ${XDG_RUNTIME_DIR:-} ]]; then
+  mkdir -p "$UNITS"
+  sed "s|@EXEC@|$LAUNCHER|g" "$SRC/packaging/lightshow.service" \
+    > "$UNITS/lightshow.service"
+  systemctl --user daemon-reload 2>/dev/null || true
+  if systemctl --user enable --now lightshow.service 2>/dev/null; then
+    say "background service enabled (starts at login)"
+  else
+    warn "could not enable the user service; run 'lightshow daemon' yourself"
+  fi
+else
+  warn "no systemd user session; run 'lightshow daemon' to keep effects alive"
 fi
 
 # -- verify -------------------------------------------------------------

@@ -22,7 +22,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/omarchy")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "lightshow.json")
 
 DEFAULT_STATE = {
-    "effect": "codedark",
+    "effect": "smatter",
     "use_theme": True,
     "colors": ["#7aa2f7"],
     "speed": 1.0,

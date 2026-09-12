@@ -1,0 +1,20 @@
+[Unit]
+Description=LightShow keyboard RGB daemon
+Documentation=https://github.com/nixfred/lightshow
+# Effects that animate across the zones are driven from userspace, so something
+# has to stay alive to step them. This also keeps the keyboard following the
+# desktop theme without the window being open.
+After=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=@EXEC@ daemon
+Restart=on-failure
+RestartSec=3
+# The device is a USB LED controller; if it is unplugged or the machine wakes
+# oddly, back off rather than spinning.
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Install]
+WantedBy=default.target

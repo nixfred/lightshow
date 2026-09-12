@@ -300,6 +300,36 @@ def fx_gamer(colors, speed=1.0):
         yield [scale(c, pulse), (0, 0, 0), scale(c, pulse * 0.8), (0, 0, 0)], 0.05
 
 
+def fx_smatter(colors, speed=1.0):
+    """Smatter: every zone wearing a DIFFERENT theme colour at once.
+
+    The point is to show the whole palette simultaneously rather than one
+    colour at a time, so the keyboard reads as the active theme rather than as
+    its accent. Each zone walks the palette at its own slightly different rate,
+    so the combination keeps reshuffling instead of marching in step.
+
+    The highlight group (zone 1 - Left Shift, SUPER, Q, W, R, F, arrows and the
+    number row on the verified hardware) is kept at full brightness while the
+    rest sit back, so those keys still stand out inside the spread.
+    """
+    pts = colors if len(colors) > 1 else (colors * 4)
+    n = len(pts)
+    # Start the zones spread across the palette, not stacked on one colour.
+    phase = [(i * n / float(N)) for i in range(N)]
+    # Deliberately non-harmonic rates so the pattern never repeats visibly.
+    rate = [0.013, 0.009, 0.017, 0.011]
+    # Highlight group full, the rest set back so Fred's keys still lead.
+    level = [1.0, 0.55, 0.70, 0.45]
+    while True:
+        frame = []
+        for i in range(N):
+            phase[i] = (phase[i] + rate[i] * speed) % n
+            a = pts[int(phase[i]) % n]
+            b = pts[(int(phase[i]) + 1) % n]
+            frame.append(scale(mix(a, b, phase[i] - int(phase[i])), level[i]))
+        yield frame, 0.05
+
+
 def fx_codedark(colors, speed=1.0):
     """Codedark: your keys drift through the theme palette, the rest stays down.
 
@@ -330,6 +360,7 @@ def fx_codedark(colors, speed=1.0):
 
 
 SOFTWARE = {
+    "smatter":      (fx_smatter,      "Every zone a different theme colour, always reshuffling"),
     "fireworks":    (fx_fireworks,    "Bursts flash and sparkle down to dark"),
     "waterfall":    (fx_waterfall,    "A cascade pouring across with foam and mist"),
     "aurora":       (fx_aurora,       "Slow independent drift, northern lights"),

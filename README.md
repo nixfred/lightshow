@@ -3,7 +3,7 @@
 <img src="docs/banner.svg" alt="LightShow" width="100%">
 
 **Keyboard RGB control for MSI laptops on Linux, with a real desktop app.**
-20 effects · live theme matching · day/night profiles · no vendor software, no Windows, no VM.
+21 effects · live theme matching · day/night profiles · no vendor software, no Windows, no VM.
 
 [![Platform](https://img.shields.io/badge/platform-Linux-1a1b26?style=flat-square&logo=linux&logoColor=white)](#requirements)
 [![Python](https://img.shields.io/badge/python-3.9%2B-7aa2f7?style=flat-square&logo=python&logoColor=white)](#requirements)
@@ -55,7 +55,12 @@ LIGHTSHOW_DEVICE=/dev/hidraw3 lightshow
 
 ## Effects
 
-<img src="docs/effects.svg" alt="The twenty effects" width="100%">
+<img src="docs/effects.svg" alt="The effects" width="100%">
+
+The default is **smatter**: all four zones wearing a different colour from the
+active theme at once, each walking the palette at a deliberately non-harmonic
+rate so the combination never settles into a repeating pattern. The highlight
+group stays at full brightness while the rest sit back.
 
 Two families, and the difference is worth understanding:
 
@@ -149,6 +154,7 @@ command-line form still work.
 
 ```bash
 lightshow                      # the desktop app
+lightshow daemon               # engine only, no window (what the service runs)
 lightshow serve                # web UI on 127.0.0.1:8787 instead
 lightshow list                 # every effect
 lightshow status               # what hardware and theme were detected
@@ -160,8 +166,25 @@ lightshow fav "Bonfire"        # load a saved favourite
 ```
 
 Hardware effects applied from the command line keep running after the process
-exits. Software effects need the app open, because something has to step the
-animation.
+exits. Software effects need a live process, which is what the background
+service is for.
+
+### The background service
+
+`install.sh` enables a systemd **user** service that runs `lightshow daemon` at
+login, with restart-on-failure. Without it, software effects stop the moment you
+close the window and the keyboard stops following your theme.
+
+```bash
+systemctl --user status lightshow      # is it running
+systemctl --user restart lightshow
+systemctl --user disable --now lightshow
+```
+
+Only one process may own the LED controller, so the desktop app **detects a
+running daemon and drives it over the local API** instead of opening the device
+itself. The window's status line says `daemon` or `local` so you can tell which
+you have. No daemon, no problem: the app falls back to owning the device.
 
 ---
 
@@ -184,9 +207,10 @@ else works the same.
 
 ```mermaid
 flowchart LR
-    GUI["GTK4 app<br/>(desktop)"] --> ENG
+    GUI["GTK4 app<br/>(desktop)"] -->|API if daemon is up| ENG
     WEB["Web UI<br/>(lightshow serve)"] --> ENG
     CLI["CLI<br/>(one-shots)"] --> ENG
+    SVC["systemd user service<br/>lightshow daemon"] --> ENG
     ENG["Engine<br/>one thread owns the device"] --> KBD["kbd.py<br/>HIDIOCSFEATURE ioctl"]
     KBD --> HW["MysticLight controller<br/>/dev/hidraw*"]
     THEME["Omarchy colors.toml"] -.watched.-> ENG

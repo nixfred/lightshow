@@ -2,6 +2,7 @@
 """LightShow for Omarchy - entry point.
 
     lightshow                 open the native desktop app
+    lightshow daemon          run the engine in the background (no window)
     lightshow serve           run the web UI instead (localhost only)
     lightshow --port 9000     port for the web UI
     lightshow <effect>        apply an effect and exit (no server)
@@ -80,6 +81,28 @@ def main():
               f"Start it with: lightshow    (then pick {args.action} in the app)",
               file=sys.stderr)
         return 2
+
+    if args.action == "daemon":
+        # Headless: owns the device and keeps effects running with no UI.
+        # Serves the same HTTP API so the desktop app can drive it instead of
+        # fighting it for the controller.
+        try:
+            httpd, engine = serve(port=args.port)
+        except OSError as e:
+            print(f"cannot bind port {args.port}: {e}", file=sys.stderr)
+            return 1
+        except kbd.DeviceError as e:
+            print(f"lightshow: {e}", file=sys.stderr)
+            return 1
+        print(f"LightShow daemon on 127.0.0.1:{args.port}")
+        print("  device " + kbd.describe_device())
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            engine.shutdown()
+        return 0
 
     if args.action == "gui":
         try:

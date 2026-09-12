@@ -15,7 +15,7 @@ gi.require_version("Adw", "1")
 
 from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
 
-from . import effects, kbd  # noqa: E402
+from . import effects, kbd, remote  # noqa: E402
 from .engine import Engine  # noqa: E402
 from .kbd import hex_rgb, rgb_hex  # noqa: E402
 
@@ -255,8 +255,9 @@ class Window(Adw.ApplicationWindow):
         self._building = True
         cur = self.engine.cfg["current"]
 
+        mode = "daemon" if isinstance(self.engine, remote.RemoteEngine) else "local"
         self.status.set_text(
-            f"{kbd.theme_name()}   ·   {self.engine.kb.node}"
+            f"{kbd.theme_name()}   ·   {self.engine.kb.node}   ·   {mode}"
             + (f"   ·   {self.engine.active_profile()}"
                if self.engine.active_profile() else ""))
 
@@ -435,7 +436,10 @@ class App(Adw.Application):
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
         if self.engine is None:
-            self.engine = Engine()
+            # A running daemon already owns the controller. Drive it over its
+            # API rather than opening the device too, or the two fight and the
+            # effects stutter.
+            self.engine = remote.connect() or Engine()
         win = Window(self, self.engine)
         win.present()
 
