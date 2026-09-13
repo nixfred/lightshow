@@ -17,9 +17,21 @@
       radial-gradient(700px 400px at 95% 0%, #2a1440 0%, transparent 55%),
       var(--bg);
     color:var(--fg); font:14px/1.5 "JetBrains Mono","Fira Code",ui-monospace,monospace;
-    min-height:100vh; padding:20px 16px 60px;
+    height:100vh; overflow:hidden; padding:14px 16px;
   }
-  .wrap{max-width:1180px;margin:0 auto}
+  /* The page never scrolls. A wide left pane holds the zones, effects and the
+     favourites list (the one thing that scrolls, in place); every setting sits
+     in the fixed rail on the right. */
+  .wrap{max-width:1500px;margin:0 auto;height:100%;display:flex;flex-direction:column}
+  .main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 420px;gap:14px}
+  .left,.rail{display:flex;flex-direction:column;gap:12px;min-height:0}
+  .left section,.rail section{margin:0}
+  .favs{flex:1;min-height:120px;display:flex;flex-direction:column}
+  .favs .list{flex:1;min-height:0;overflow:auto;align-content:flex-start}
+  h2.split{display:flex;justify-content:space-between;align-items:center}
+  h2.split .toggle{letter-spacing:.1em}
+  .pl{min-width:64px}
+  .rail .row + .row{margin-top:8px}
   /* The Omarchy chamfer: a bevelled corner, used on every surface. */
   .cham{clip-path:polygon(var(--chamfer) 0,100% 0,100% calc(100% - var(--chamfer)),calc(100% - var(--chamfer)) 100%,0 100%,0 var(--chamfer))}
 
@@ -104,18 +116,17 @@
     </div>
   </header>
 
-  <section class="cham">
+  <!-- The page never scrolls: wide left pane + settings rail. Only the
+       favourites list scrolls, in place. -->
+  <div class="main">
+  <div class="left">
+  <section class="cham" title="Four zone groups is everything the MS-1801 controller exposes. Individual keys cannot be addressed, so this preview is the real resolution of the hardware.">
     <h2>Live zones</h2>
     <div class="kbd">
       <div class="zone cham" id="z0"><span>WASD</span></div>
       <div class="zone cham" id="z1"><span>Main block</span></div>
       <div class="zone cham" id="z2"><span>Nav / arrows</span></div>
       <div class="zone cham" id="z3"><span>Numpad</span></div>
-    </div>
-    <div class="note">
-      Four zone groups is everything the MS-1801 controller exposes. Individual
-      keys cannot be addressed, so this preview is the real resolution of the
-      hardware, not a simplification.
     </div>
   </section>
 
@@ -124,7 +135,17 @@
     <div class="grid" id="fx"></div>
   </section>
 
-  <div class="cols">
+  <section class="cham favs">
+    <h2>Favourites</h2>
+    <div class="row">
+      <input type="text" id="favName" placeholder="name this look">
+      <button class="primary" id="favSave">Save current</button>
+    </div>
+    <div class="row list" id="favList"></div>
+  </section>
+  </div>
+
+  <div class="rail">
     <section class="cham">
       <h2>Colour</h2>
       <div class="row">
@@ -157,48 +178,28 @@
         <input type="range" id="bright" min="0.05" max="1" step="0.05">
         <span id="brightV" class="meta"></span>
       </div>
-      <div class="row">
+      <div class="row" title="Scroll text shows one travelling pulse per letter. With four zones the letters cannot be drawn as shapes, so you are watching the word's rhythm cross the keyboard.">
         <label>Scroll text</label>
         <input type="text" id="word" maxlength="24" placeholder="OMARCHY">
         <button id="doScroll">Scroll it</button>
       </div>
-      <div class="note">
-        Scroll text shows one travelling pulse per letter. With four zones the
-        letters cannot be drawn as shapes, so you are watching the word's rhythm
-        cross the keyboard.
+    </section>
+
+    <section class="cham" title="Auto-switch checks every 20 seconds and applies whichever profile the clock falls into.">
+      <h2 class="split">Day &amp; Night
+        <label class="toggle"><input type="checkbox" id="schedOn"> Auto-switch</label></h2>
+      <div class="row">
+        <label class="pl">☀ Day</label><input type="time" id="dayAt">
+        <button id="loadDay">Load</button><button id="saveDay">Save current</button>
       </div>
+      <div class="row">
+        <label class="pl">☾ Night</label><input type="time" id="nightAt">
+        <button id="loadNight">Load</button><button id="saveNight">Save current</button>
+      </div>
+      <div class="row"><button id="schedSave">Apply schedule</button></div>
     </section>
   </div>
-
-  <section class="cham">
-    <h2>Favourites</h2>
-    <div class="row">
-      <input type="text" id="favName" placeholder="name this look">
-      <button class="primary" id="favSave">Save current</button>
-    </div>
-    <div class="row" id="favList"></div>
-  </section>
-
-  <section class="cham">
-    <h2>Day &amp; Night</h2>
-    <div class="row">
-      <button id="loadDay">☀ Load day</button>
-      <button id="saveDay">Save current as day</button>
-      <button id="loadNight">☾ Load night</button>
-      <button id="saveNight">Save current as night</button>
-    </div>
-    <div class="row">
-      <label class="toggle"><input type="checkbox" id="schedOn"> Auto-switch</label>
-      <label>Day at</label><input type="time" id="dayAt">
-      <label>Night at</label><input type="time" id="nightAt">
-      <button id="schedSave">Apply schedule</button>
-    </div>
-    <div class="note">
-      Auto-switch checks every 20 seconds and applies whichever profile the
-      clock falls into. A night profile at low brightness keeps the board
-      readable without lighting the room.
-    </div>
-  </section>
+  </div>
 
 </div>
 
