@@ -324,7 +324,8 @@ class Keyboard:
         next write reads the new profile's record and lands there.
 
         Called every second. The profile key's own report triggers the check
-        at once; otherwise the active profile is read every 4 s as a backstop.
+        at once; otherwise the active profile is read every PROFILE_BACKSTOP
+        seconds (0 = never) as a backstop.
         """
         if self._gone or self._profile is None or self._direct:
             return False
