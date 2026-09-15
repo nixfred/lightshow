@@ -99,6 +99,7 @@ CONTROL_LOCK_WAIT = 5.0      # the other writer's longest transaction is ~1 s
 # press. 0 = never poll (events still work). Keep control traffic low: key
 # repeats were seen 2026-09-15 while another tool wrote labels every 5 s.
 PROFILE_BACKSTOP = float(os.environ.get("LIGHTSHOW_KB7_PROFILE_POLL", "20"))
+TYPING_IDLE = 2.0            # no key reports for this long before a backstop read
 
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
 # After a replug, leave the fresh board alone this long before reopening it:
@@ -237,6 +238,7 @@ class Keyboard:
         self._yielded = False         # direct mode dropped while kb7ctl holds interface 1
         self._frames_without_ack = 0
         self._last_profile_check = 0.0
+        self._last_key_report = 0.0   # any non-button report on the control node = typing
 
     # -- hot-plug ----------------------------------------------------------
 
@@ -307,6 +309,7 @@ class Keyboard:
                     self._mark_gone()
                 break
             if len(rep) < 5 or rep[0] != 0x03 or rep[1] != 0x00:
+                self._last_key_report = time.monotonic()   # keys, media, wheel: Fred is typing
                 continue
             # Only the button's own press report. `03 00 31 ..` follows it too, but
             # the board sends 31 after ANY config write (label writes, our own
@@ -338,6 +341,8 @@ class Keyboard:
         if "profile" not in events:
             if PROFILE_BACKSTOP <= 0 or now - self._last_profile_check < PROFILE_BACKSTOP:
                 return False
+            if now - self._last_key_report < TYPING_IDLE:
+                return False              # never poll under Fred's fingers; try next second
         if now < self._backoff_until:
             return False
         self._last_profile_check = now
