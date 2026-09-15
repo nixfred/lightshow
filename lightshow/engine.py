@@ -22,7 +22,7 @@ CONFIG_DIR = os.path.expanduser("~/.config/omarchy")
 CONFIG_PATH = os.path.join(CONFIG_DIR, "lightshow.json")
 
 DEFAULT_STATE = {
-    "effect": "smatter",
+    "effect": "breathe",      # Fred 2026-09-15: a breathe in the theme colours
     "use_theme": True,
     "colors": ["#7aa2f7"],
     "speed": 1.0,

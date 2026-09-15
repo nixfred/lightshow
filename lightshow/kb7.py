@@ -326,6 +326,15 @@ class Keyboard:
             rgb = next(tuple(f[1:4]) for f in keyframes if sum(f[1:4]) * 2 >= peak)
         else:
             rgb = (0, 0, 0)
+        # Breathe carries the theme palette as alternating dim/peak keyframes;
+        # the firmware breathes the whole record, so give each zone its own peak
+        # colour (dim troughs are 5% of a colour, far under a fifth of the peak).
+        palette = []
+        if mode == MODE_BREATHING and keyframes:
+            for f in keyframes:
+                c = tuple(int(v) for v in f[1:4])
+                if sum(c) * 5 >= peak and c not in palette:
+                    palette.append(c)
         masks = [m for m in ZONE_MASKS if zone_mask & m]
         # A hardware look owns the keys again: leave direct (streamed) mode first.
         self._yielded = False
@@ -347,7 +356,11 @@ class Keyboard:
             return
         # The KB7 has no keyframe cycle; cycle falls back to static.
         mode_byte = KB7_MODE.get(mode, KB7_MODE[MODE_STATIC])
-        self._write({m: rgb for m in masks}, mode_byte,
+        if len(palette) > 1:
+            zone_colours = {m: palette[i % len(palette)] for i, m in enumerate(masks)}
+        else:
+            zone_colours = {m: rgb for m in masks}
+        self._write(zone_colours, mode_byte,
                     brightness=self._restore_brightness())
 
     def solid(self, zone_mask, rgb):

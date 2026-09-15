@@ -36,9 +36,16 @@ def apply_hardware(kb, name, colors, speed=1.0, brightness=1.0):
     elif name == "static":
         kb.set(ZONE_ALL, kbd.MODE_STATIC, [(0, *cols[0])])
     elif name == "breathe":
-        kb.set(ZONE_ALL, kbd.MODE_BREATHING,
-               [(0, *scale(cols[0], 0.05)), (50, *cols[0])],
-               cycle_cs=int(350 / max(0.1, speed)))
+        # Breathe through the theme palette: in on one colour, out to near-dark,
+        # the next colour in. Up to 4 colours so the MSI's 9 keyframes plus the
+        # closing frame fit. The KB7 spreads the same colours over its zones.
+        pal = [c for c in cols if sum(c) > 90][:4] or cols[:1]
+        step = 100 // len(pal)
+        frames = []
+        for i, c in enumerate(pal):
+            frames += [(i * step, *scale(c, 0.05)), (i * step + step // 2, *c)]
+        kb.set(ZONE_ALL, kbd.MODE_BREATHING, frames,
+               cycle_cs=min(0xFFFF, int(350 * len(pal) / max(0.1, speed))))
     elif name == "cycle":
         pts = cols[:8]
         step = 100 // max(1, len(pts))
@@ -380,7 +387,7 @@ SOFTWARE = {
 
 HARDWARE_INFO = {
     "wave":    "Hardware wave across the zones. Zero CPU",
-    "breathe": "Hardware breathing on the accent. Zero CPU",
+    "breathe": "Hardware breathing through the theme palette. Zero CPU",
     "cycle":   "Hardware cycle through the palette. Zero CPU",
     "static":  "One solid colour",
     "off":     "All zones dark",
