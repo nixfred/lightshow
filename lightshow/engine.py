@@ -177,13 +177,18 @@ class Engine:
         came out different. Cheap enough at 4 second intervals.
         """
         last = None
+        tick = 0
         while not self._stop.is_set():
-            time.sleep(4)
+            time.sleep(1)
             # A replugged board comes back blank, and a profile switch shows the
-            # board's own lighting: either way, give it the look back.
+            # board's own lighting: either way, give it the look back. Every
+            # second, so a button press is answered within one.
             poll = getattr(self.kb, "poll", None)
             if poll and poll():
                 self.apply(self.cfg["current"], save=False)
+            tick += 1
+            if tick % 4:
+                continue
             if not self.cfg["current"].get("use_theme", True):
                 last = None
                 continue

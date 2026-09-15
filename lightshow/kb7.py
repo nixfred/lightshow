@@ -32,6 +32,7 @@ import fcntl
 import glob
 import json
 import os
+import select
 import sys
 import threading
 import time
@@ -218,6 +219,7 @@ class Keyboard:
         self._direct = False          # 0E 05 01 active: the board accepts streamed frames
         self._yielded = False         # direct mode dropped while kb7ctl holds interface 1
         self._frames_without_ack = 0
+        self._last_profile_check = 0.0
 
     # -- hot-plug ----------------------------------------------------------
 
@@ -263,15 +265,62 @@ class Keyboard:
         print(f"kb7: back on {node}, reopened", file=sys.stderr, flush=True)
         return True
 
+    def _drain_events(self):
+        """Input reports queued on the control node, never blocking. The four
+        top buttons report `03 00 02 <80..83> <01 down | 00 up>`; button 2
+        (0x81) is the firmware profile switch and is followed by `03 00 31 ..`;
+        button 4 (0x83) dims the lights in firmware. Decoded from counted
+        presses on fw 1.37, 2026-09-15."""
+        seen = set()
+        if self.fd is None or self._gone:
+            return seen
+        for _ in range(64):
+            try:
+                ready, _, _ = select.select([self.fd], [], [], 0)
+            except (OSError, ValueError):
+                break
+            if not ready:
+                break
+            try:
+                rep = os.read(self.fd, 64)
+            except BlockingIOError:
+                break
+            except OSError as e:
+                if e.errno in (errno.ENODEV, errno.ENXIO):
+                    self._mark_gone()
+                break
+            if len(rep) < 5 or rep[0] != 0x03 or rep[1] != 0x00:
+                continue
+            if rep[2] == 0x31 or (rep[2] == 0x02 and rep[3] == 0x81 and rep[4] == 0x01):
+                seen.add("profile")
+            elif rep[2] == 0x02 and rep[3] == 0x83 and rep[4] == 0x01:
+                seen.add("dim")
+        return seen
+
     def poll_profile(self):
         """True when the board's active profile is no longer the one the look
         was written to: the top-row profile key switched it, and the keys now
         show that profile's own lighting. The caller re-applies the look; the
-        next write reads the new profile's record and lands there."""
+        next write reads the new profile's record and lands there.
+
+        Called every second. The profile key's own report triggers the check
+        at once; otherwise the active profile is read every 4 s as a backstop.
+        """
         if self._gone or self._profile is None or self._direct:
             return False
-        if time.monotonic() < self._backoff_until:
+        events = self._drain_events()
+        if "dim" in events:
+            # Firmware changed the brightness: the cached record is stale, so the
+            # next write re-reads the board's record instead of restoring the old level.
+            self._template = None
+        now = time.monotonic()
+        if "profile" in events:
+            time.sleep(0.3)               # let the firmware finish the switch
+        elif now - self._last_profile_check < 4.0:
             return False
+        if now < self._backoff_until:
+            return False
+        self._last_profile_check = now
         try:
             active = self._active_profile()
         except OSError:
