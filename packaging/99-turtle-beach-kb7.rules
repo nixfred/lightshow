@@ -1,0 +1,7 @@
+# Turtle Beach Command Series KB7 (10f5:5038) lighting (LightShow).
+# Only the CONTROL interface (USB interface 2, the vendor feature reports that
+# carry the backlight record) is opened up, and only for the logged-in seat
+# via uaccess. Interface 3 is the boot keyboard itself, so it is deliberately
+# NOT matched: write access to the lighting must not also hand out a way to
+# read keystrokes.
+KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="5038", ATTRS{bInterfaceNumber}=="02", TAG+="uaccess"

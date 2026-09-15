@@ -23,7 +23,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lightshow import effects, kbd  # noqa: E402
+from lightshow import effects, kbd, kb7  # noqa: E402
 from lightshow.engine import Engine  # noqa: E402
 from lightshow.server import serve  # noqa: E402
 
@@ -65,6 +65,9 @@ def main():
         if len(others) > 1:
             for n, ident, name in others:
                 print(f"         also: {n}  {ident}  {name}")
+        kb7_node = kb7.find_control_node()
+        print("kb7    : " + (f"{kb7_node}  {kb7.VID}:{kb7.PID}  Turtle Beach Command Series KB7"
+                              if kb7_node else "not connected"))
         print(f"theme  : {kbd.theme_name()}")
         print("palette: " + " ".join(kbd.rgb_hex(c) for c in kbd.theme_colors()))
         return
@@ -95,7 +98,7 @@ def main():
             print(f"lightshow: {e}", file=sys.stderr)
             return 1
         print(f"LightShow daemon on 127.0.0.1:{args.port}")
-        print("  device " + kbd.describe_device())
+        print("  device " + engine.kb.node)
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

@@ -16,6 +16,7 @@ APPS="$HOME/.local/share/applications"
 ICONS="$HOME/.local/share/icons/hicolor/scalable/apps"
 UNITS="$HOME/.config/systemd/user"
 UDEV=/etc/udev/rules.d/99-msi-mysticlight.rules
+UDEV_KB7=/etc/udev/rules.d/99-turtle-beach-kb7.rules
 DESKTOP="$APPS/com.nixfred.LightShow.desktop"
 LAUNCHER="$BIN/lightshow"
 
@@ -31,9 +32,9 @@ uninstall() {
   fi
   rm -f "$LAUNCHER" "$DESKTOP" "$ICONS/com.nixfred.LightShow.svg"
   say "removed launcher, desktop entry and icon"
-  if [[ -f $UDEV ]]; then
-    sudo rm -f "$UDEV" && sudo udevadm control --reload-rules
-    say "removed udev rule"
+  if [[ -f $UDEV || -f $UDEV_KB7 ]]; then
+    sudo rm -f "$UDEV" "$UDEV_KB7" && sudo udevadm control --reload-rules
+    say "removed udev rules"
   fi
   say "config left alone at ~/.config/omarchy/lightshow.json"
   exit 0
@@ -98,6 +99,14 @@ else
     fi
   else
     warn "could not install the udev rule; run LightShow with sudo instead"
+  fi
+  # Turtle Beach KB7: only the control interface, for the logged-in seat.
+  if sudo install -m644 "$SRC/packaging/99-turtle-beach-kb7.rules" "$UDEV_KB7"; then
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger --subsystem-match=hidraw
+    say "udev rule installed -> $UDEV_KB7 (KB7 control interface only)"
+  else
+    warn "could not install the KB7 udev rule"
   fi
 fi
 

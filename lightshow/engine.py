@@ -15,7 +15,7 @@ import threading
 import time
 import datetime
 
-from . import kbd, effects
+from . import kbd, effects, devices
 from .kbd import hex_rgb, rgb_hex
 
 CONFIG_DIR = os.path.expanduser("~/.config/omarchy")
@@ -74,7 +74,8 @@ def _hhmm(s, fallback):
 class Engine:
     def __init__(self):
         self.cfg = _load()
-        self.kb = kbd.Keyboard()
+        # Every supported keyboard that is plugged in (MSI MysticLight, KB7).
+        self.kb = devices.open_all()
         # Last frame actually written to the hardware, so a UI can mirror it.
         self.last_frame = [(0, 0, 0)] * 4
         self._stop = threading.Event()

@@ -2,7 +2,7 @@
 
 <img src="docs/banner.svg" alt="LightShow" width="100%">
 
-**Keyboard RGB control for MSI laptops on Linux, with a real desktop app.**
+**Keyboard RGB control for MSI laptops and the Turtle Beach KB7 on Linux, with a real desktop app.**
 21 effects · live theme matching · day/night profiles · no vendor software, no Windows, no VM.
 
 [![Platform](https://img.shields.io/badge/platform-Linux-1a1b26?style=flat-square&logo=linux&logoColor=white)](#requirements)
@@ -19,15 +19,18 @@
 
 **Read this part first.** This drives one specific family of hardware.
 
-LightShow talks to **MSI "MysticLight" keyboard LED controllers** over raw USB HID.
-It is *not* a general RGB tool. It will not drive Razer, Corsair, Logitech, ASUS,
-Framework, or desktop motherboard lighting.
+LightShow talks to **MSI "MysticLight" keyboard LED controllers** and the
+**Turtle Beach Command Series KB7** over raw USB HID. It is *not* a general RGB
+tool. It will not drive Razer, Corsair, Logitech, ASUS, Framework, or desktop
+motherboard lighting.
 
 Check in one command:
 
 ```bash
-grep -l MysticLight /sys/class/hidraw/*/device/uevent 2>/dev/null && echo "supported controller found"
+grep -lE 'MysticLight|10F5:00005038' /sys/class/hidraw/*/device/uevent 2>/dev/null && echo "supported keyboard found"
 ```
+
+If both are plugged in, LightShow drives both at once.
 
 | Device | Model | Status |
 |---|---|---|
@@ -37,6 +40,7 @@ grep -l MysticLight /sys/class/hidraw/*/device/uevent 2>/dev/null && echo "suppo
 | `1462:1601` | MSI Katana 15 HX (MS-1565) | 🟡 Reported — untested here |
 | `1462:1562/3/4` | MSI Delta 15, Alpha 15/17 | 🟡 Reported — untested here |
 | anything else reporting `MysticLight` | unlisted MSI laptops | 🔵 Auto-detected, worth trying |
+| `10f5:5038` | Turtle Beach Command Series KB7 (firmware 1.22) | ✅ **Verified** — per-key backlight, see [below](#turtle-beach-kb7) |
 
 Detection matches the HID **product string**, not a hardcoded product ID, so models
 nobody has catalogued are picked up automatically. If yours reports a different
@@ -104,6 +108,42 @@ Left Shift, SUPER, Q, W, R, F, the arrows and the number row. That is what the
 
 ---
 
+## Turtle Beach KB7
+
+The KB7 is a different kind of device. It has **101 individually lit keys**, and
+its whole backlight lives in one **persistent per-profile record** (HID feature
+report `0x11`, 348 bytes, on USB interface 2). LightShow maps its four zones onto
+KB7 key groups:
+
+| LightShow zone | KB7 keys |
+|---|---|
+| WASD (mask 1) | W A S D |
+| Main block (mask 2) | letters, numbers, F-row, modifiers, Space |
+| Nav (mask 4) | the arrow cluster and the keys beside it |
+| Numpad (mask 8) | the ten-LED light strip and the media row (the KB7 has no numpad) |
+
+What it does, and what it deliberately does not:
+
+- **Static, breathe and wave** run on the keyboard's own microcontroller. LightShow
+  writes one record when you apply the look and nothing after that.
+- **The record is persistent storage**, and nobody knows whether the firmware
+  commits every write to flash. So software effects do **not** animate on the KB7:
+  a record is written only when the set of colours changes, and never more than
+  once every 5 seconds. The MSI board keeps animating as usual.
+- **Only the active profile** is written, using the board's own record as the
+  template, so speed, brightness and unused LED slots stay exactly as they were.
+- **Requests are paced.** On firmware 1.22 a read that follows a write within a few
+  milliseconds wedges the keyboard's report handler. LightShow waits 300 ms after
+  every write and backs off for 10 seconds after any failure; left alone the
+  handler recovers in seconds.
+- The screen, tile labels and firmware updates are out of scope.
+
+The record layout was captured from Turtle Beach's Swarm II driving a KB7 on
+firmware 1.22, and LightShow's writes were checked byte for byte against those
+captures. The key-to-LED table comes from the same device support package.
+
+---
+
 ## Install
 
 ```bash
@@ -131,6 +171,14 @@ grants nothing that was not already available, and it needs no re-login. **That
 hidraw node is the LED microcontroller, not the key input device**, so write
 access to it cannot be used to read keystrokes. Skip it with
 `./install.sh --no-udev` and run with sudo instead.
+
+For the KB7 a second rule opens **only the control interface** (USB interface 2),
+for the logged-in seat. Interface 3 is the keyboard itself and is deliberately
+not matched:
+
+```
+KERNEL=="hidraw*", ATTRS{idVendor}=="10f5", ATTRS{idProduct}=="5038", ATTRS{bInterfaceNumber}=="02", TAG+="uaccess"
+```
 
 ---
 
