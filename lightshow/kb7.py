@@ -194,6 +194,7 @@ class Keyboard:
         self._stream_backoff_until = 0.0
         self._stream_announced = False
         self._direct = False          # 0E 05 01 active: the board accepts streamed frames
+        self._yielded = False         # direct mode dropped while kb7ctl holds interface 1
         self._frames_without_ack = 0
 
     # -- raw feature reports --------------------------------------------
@@ -327,6 +328,7 @@ class Keyboard:
             rgb = (0, 0, 0)
         masks = [m for m in ZONE_MASKS if zone_mask & m]
         # A hardware look owns the keys again: leave direct (streamed) mode first.
+        self._yielded = False
         if self._direct:
             try:
                 self._direct_mode(False)
@@ -370,6 +372,7 @@ class Keyboard:
         self._write(zone_colours, KB7_MODE[MODE_STATIC],
                     brightness=self._restore_brightness())
         # Then hand the keys to the live stream (OpenRGB's EnableDirect + WaitUntilReady).
+        self._yielded = False
         if os.environ.get("LIGHTSHOW_KB7_STREAM", "1") != "0":
             self._direct_mode(True)
 
@@ -451,7 +454,7 @@ class Keyboard:
         """
         # LIGHTSHOW_KB7_STREAM=0 keeps interface 1 silent (e.g. while a screen
         # image upload uses the same pipe); the still look stays on the keys.
-        if os.environ.get("LIGHTSHOW_KB7_STREAM", "1") == "0" or not self._direct:
+        if os.environ.get("LIGHTSHOW_KB7_STREAM", "1") == "0" or not (self._direct or self._yielded):
             return
         now = time.monotonic()
         if now < self._stream_backoff_until or now - self._last_stream < STREAM_MIN_INTERVAL:
@@ -487,6 +490,15 @@ class Keyboard:
                 self._lock_waiting = True
                 print("kb7: interface 1 locked by another writer, pausing frames",
                       file=sys.stderr, flush=True)
+            # After streaming, the board ignores kb7ctl's `a5 00` upload start
+            # while direct mode stays on; Swarm always ends a stream with 0E 05 00.
+            if self._direct:
+                try:
+                    self._direct_mode(False)
+                    self._yielded = True
+                except OSError as e:
+                    print(f"kb7: could not leave direct mode for the other writer: {e}",
+                          file=sys.stderr, flush=True)
             return False
         except OSError as e:
             print(f"kb7: stream lock {STREAM_LOCK} failed: {e} (backing off {STREAM_BACKOFF:.0f}s)",
@@ -496,6 +508,12 @@ class Keyboard:
         if getattr(self, "_lock_waiting", False):
             self._lock_waiting = False
             print("kb7: interface 1 free again, resuming frames", file=sys.stderr, flush=True)
+        if self._yielded:
+            self._yielded = False
+            try:
+                self._direct_mode(True)
+            except OSError as e:
+                print(f"kb7: could not re-enter direct mode: {e}", file=sys.stderr, flush=True)
         return True
 
     def _stream_frame(self, body, now):
