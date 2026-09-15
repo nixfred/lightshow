@@ -94,6 +94,11 @@ STREAM_LOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.get
 CONTROL_LOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"),
                             "kb7-control.lock")
 CONTROL_LOCK_WAIT = 5.0      # the other writer's longest transaction is ~1 s
+# Backstop read of the active profile (GET 0x06) every this many seconds; the
+# profile key's own report triggers it at once, so this only catches a missed
+# press. 0 = never poll (events still work). Keep control traffic low: key
+# repeats were seen 2026-09-15 while another tool wrote labels every 5 s.
+PROFILE_BACKSTOP = float(os.environ.get("LIGHTSHOW_KB7_PROFILE_POLL", "20"))
 
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
 # After a replug, leave the fresh board alone this long before reopening it:
@@ -303,7 +308,10 @@ class Keyboard:
                 break
             if len(rep) < 5 or rep[0] != 0x03 or rep[1] != 0x00:
                 continue
-            if rep[2] == 0x31 or (rep[2] == 0x02 and rep[3] == 0x81 and rep[4] == 0x01):
+            # Only the button's own press report. `03 00 31 ..` follows it too, but
+            # the board sends 31 after ANY config write (label writes, our own
+            # 0x11), so it is not a profile signal (peer finding, 2026-09-15 14:47).
+            if rep[2] == 0x02 and rep[3] == 0x81 and rep[4] == 0x01:
                 seen.add("profile")
             elif rep[2] == 0x02 and rep[3] == 0x83 and rep[4] == 0x01:
                 seen.add("dim")
@@ -326,8 +334,9 @@ class Keyboard:
             # next write re-reads the board's record instead of restoring the old level.
             self._template = None
         now = time.monotonic()
-        if "profile" not in events and now - self._last_profile_check < 4.0:
-            return False
+        if "profile" not in events:
+            if PROFILE_BACKSTOP <= 0 or now - self._last_profile_check < PROFILE_BACKSTOP:
+                return False
         if now < self._backoff_until:
             return False
         self._last_profile_check = now
