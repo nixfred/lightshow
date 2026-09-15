@@ -33,6 +33,7 @@ import glob
 import json
 import os
 import sys
+import threading
 import time
 
 from .kbd import (DeviceError, MODE_OFF, MODE_STATIC, MODE_BREATHING,
@@ -197,6 +198,7 @@ class Keyboard:
         self._instance = _instance(node)
         self._gone = False         # a request hit ENODEV: the board was unplugged
         self._seen_new = None      # (instance, when) of a board waiting out HOTPLUG_GRACE
+        self._io = threading.Lock()   # one feature request at a time, pacing included
         self._reset_state()
 
     def _reset_state(self):
@@ -261,6 +263,29 @@ class Keyboard:
         print(f"kb7: back on {node}, reopened", file=sys.stderr, flush=True)
         return True
 
+    def poll_profile(self):
+        """True when the board's active profile is no longer the one the look
+        was written to: the top-row profile key switched it, and the keys now
+        show that profile's own lighting. The caller re-applies the look; the
+        next write reads the new profile's record and lands there."""
+        if self._gone or self._profile is None or self._direct:
+            return False
+        if time.monotonic() < self._backoff_until:
+            return False
+        try:
+            active = self._active_profile()
+        except OSError:
+            return False
+        if active == self._profile:
+            return False
+        print(f"kb7: active profile changed {self._profile} -> {active}, giving it the look",
+              file=sys.stderr, flush=True)
+        return True
+
+    def poll(self):
+        """Every few seconds from the engine: True when the look must be re-applied."""
+        return self.poll_hotplug() or self.poll_profile()
+
     # -- raw feature reports --------------------------------------------
 
     # Pacing, learned the hard way on firmware 1.22 (2026-09-14): a GET that
@@ -280,6 +305,10 @@ class Keyboard:
             time.sleep(wait)
 
     def _get(self, rid, n):
+        with self._io:
+            return self._get_locked(rid, n)
+
+    def _get_locked(self, rid, n):
         self._pace()
         buf = bytearray(n + 1)
         buf[0] = rid
@@ -297,6 +326,10 @@ class Keyboard:
         return bytes(buf)
 
     def _set(self, data):
+        with self._io:
+            self._set_locked(data)
+
+    def _set_locked(self, data):
         self._pace()
         buf = bytearray(data)
         try:

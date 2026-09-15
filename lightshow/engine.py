@@ -179,8 +179,9 @@ class Engine:
         last = None
         while not self._stop.is_set():
             time.sleep(4)
-            # A replugged board comes back blank: reopen it and give it the look back.
-            poll = getattr(self.kb, "poll_hotplug", None)
+            # A replugged board comes back blank, and a profile switch shows the
+            # board's own lighting: either way, give it the look back.
+            poll = getattr(self.kb, "poll", None)
             if poll and poll():
                 self.apply(self.cfg["current"], save=False)
             if not self.cfg["current"].get("use_theme", True):
