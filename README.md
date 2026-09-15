@@ -142,6 +142,11 @@ What it does, and what it deliberately does not:
   milliseconds wedges the keyboard's report handler. LightShow waits 300 ms after
   every write and backs off for 10 seconds after any failure; left alone the
   handler recovers in seconds.
+- **Replug and it comes back.** The driver notices a new USB enumeration, leaves the
+  fresh board alone for 10 seconds (a plug-time helper may be writing the tile
+  labels on the same node), then reopens it and puts the current look back. No
+  restart needed. Proven with a software replug (`authorized` 0/1 in sysfs):
+  unplug seen, reopened 14 s later, look back on the keys one second after.
 - The screen, tile labels and firmware updates are out of scope.
 
 The record layout was captured from Turtle Beach's Swarm II driving a KB7 on
