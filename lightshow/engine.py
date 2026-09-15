@@ -119,6 +119,10 @@ class Engine:
                 gen = fn(colors, speed=speed, **kwargs)
                 self._bright = bright
                 self._gen = gen
+                # Boards that cannot animate per frame (the KB7) get one look now.
+                begin = getattr(self.kb, "begin_software", None)
+                if begin:
+                    begin(name, [kbd.scale(c, bright) for c in colors])
             else:
                 effects.apply_hardware(self.kb, name, colors, speed, bright)
                 cols = [kbd.scale(c, bright) for c in colors]

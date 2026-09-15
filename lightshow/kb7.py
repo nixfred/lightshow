@@ -31,6 +31,7 @@ import fcntl
 import glob
 import json
 import os
+import sys
 import time
 
 from .kbd import (DeviceError, MODE_OFF, MODE_STATIC, MODE_BREATHING,
@@ -47,7 +48,11 @@ SELECT_REPORT = 0x05
 SELECT_LIGHT = 0xB0
 PROFILE_REPORT = 0x06
 
-KB7_MODE = {MODE_STATIC: 0x01, MODE_BREATHING: 0x07, MODE_WAVE: 0x0A}
+# Only modes captured from Swarm writing this board. Wave (0x0a) was seen in the
+# factory record but never written by Swarm; a LightShow wave write on
+# 2026-09-14 was the last write before the board went dark, so wave falls back
+# to static until it is captured.
+KB7_MODE = {MODE_STATIC: 0x01, MODE_BREATHING: 0x07}
 B7_CUSTOM = 0x0B
 
 # Software-effect frames are throttled to one record write per this many
@@ -155,8 +160,10 @@ class Keyboard:
         buf[0] = rid
         try:
             fcntl.ioctl(self.fd, _ioc(3, "H", 0x07, n + 1), buf, True)
-        except OSError:
+        except OSError as e:
             self._backoff_until = time.monotonic() + BACKOFF_AFTER_FAILURE
+            print(f"kb7: GET 0x{rid:02x} failed: {e} (backing off {BACKOFF_AFTER_FAILURE:.0f}s)",
+                  file=sys.stderr, flush=True)
             raise
         return bytes(buf)
 
@@ -165,8 +172,10 @@ class Keyboard:
         buf = bytearray(data)
         try:
             fcntl.ioctl(self.fd, _ioc(3, "H", 0x06, len(buf)), buf, True)
-        except OSError:
+        except OSError as e:
             self._backoff_until = time.monotonic() + BACKOFF_AFTER_FAILURE
+            print(f"kb7: SET 0x{buf[0]:02x} failed: {e} (backing off {BACKOFF_AFTER_FAILURE:.0f}s)",
+                  file=sys.stderr, flush=True)
             raise
         finally:
             self._last_set = time.monotonic()
@@ -224,6 +233,10 @@ class Keyboard:
         out = checksummed(rec)
         if out == self._last_written:
             return False
+        w = self.positions.get(47, 0) + LIGHT_HDR
+        print(f"kb7: write 0x11 profile={profile} mode={mode_byte:#04x} "
+              f"bright={out[6]} W=({out[w]},{out[w + 16]},{out[w + 32]})",
+              file=sys.stderr, flush=True)
         self._set(out)
         self._last_written = out
         self._template = bytearray(out)   # the board now holds this record
@@ -275,26 +288,26 @@ class Keyboard:
     def off(self, zone_mask=None):
         self.set(zone_mask or 15, MODE_OFF, [(0, 0, 0, 0)])
 
-    def frame(self, colors):
-        """One software-effect frame: 4 zone colours in one record.
+    def begin_software(self, name, colors):
+        """A software effect is starting. The KB7 cannot animate through its
+        persistent record, so it gets ONE static record for the whole effect:
+        the effect's palette spread across the four zones at full colour, every
+        zone lit. Nothing more is written until the look or theme changes.
 
-        Effects like smatter reshuffle the same palette many times a second.
-        The KB7 cannot take that as record writes (flash wear), so a frame is
-        written only when the SET of colours in it changes, and then no more
-        than once per FRAME_MIN_INTERVAL. The board keeps the first
-        arrangement it was given until the palette itself changes.
+        (2026-09-15: writing frames instead froze "gamer" on the KB7 with only
+        WASD and arrows lit at a dim breathing level, 90 keys black, and cost
+        a record write every 5 s.)
         """
-        palette = frozenset(tuple(int(c) for c in rgb) for rgb in colors)
-        if palette == self._last_frame_palette:
-            return
-        now = time.monotonic()
-        if now - self._last_frame_write < FRAME_MIN_INTERVAL:
-            return
-        wrote = self._write(dict(zip(ZONE_MASKS, colors)), KB7_MODE[MODE_STATIC],
-                            brightness=self._restore_brightness())
-        self._last_frame_palette = palette
-        if wrote:
-            self._last_frame_write = now
+        cols = [tuple(int(c) for c in rgb) for rgb in (colors or [(122, 162, 247)])]
+        bright = [c for c in cols if sum(c) > 90] or cols
+        zone_colours = {m: bright[i % len(bright)] for i, m in enumerate(ZONE_MASKS)}
+        self._write(zone_colours, KB7_MODE[MODE_STATIC],
+                    brightness=self._restore_brightness())
+
+    def frame(self, colors):
+        """Software-effect frames are never written to the KB7: its colour
+        lives in persistent storage. begin_software() already painted it."""
+        return
 
     def close(self):
         try:
