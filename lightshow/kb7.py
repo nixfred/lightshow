@@ -78,6 +78,10 @@ STREAM_ACK_TIMEOUT = 0.1     # seconds to wait for each 32 <seq> ack
 STREAM_FIRST_ACK_TIMEOUT = 1.0
 STREAM_IDLE_RESTART = 1.0
 STREAM_BACKOFF = 10.0        # stop streaming this long after a missed ack
+# Shared with kb7ctl (turtle.beach.keyboard): its screen-image upload uses the
+# same interface-1 node, so both sides take this flock around their writes.
+STREAM_LOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"),
+                           "kb7-iface1.lock")
 
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
 SELECT_POLL = 0.15           # Swarm's own select polling cadence
@@ -465,9 +469,40 @@ class Keyboard:
                     continue
                 base = STREAM_OFFSET + p
                 body[base], body[base + 16], body[base + 32] = r, g, b
+        if not self._stream_lock_take():
+            return
+        try:
+            self._stream_frame(body, now)
+        finally:
+            fcntl.flock(self._lock_fd, fcntl.LOCK_UN)
+
+    def _stream_lock_take(self):
+        """Non-blocking per-frame flock; skip the frame while kb7ctl uploads."""
+        try:
+            if getattr(self, "_lock_fd", None) is None:
+                self._lock_fd = os.open(STREAM_LOCK, os.O_RDWR | os.O_CREAT, 0o644)
+            fcntl.flock(self._lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            if not getattr(self, "_lock_waiting", False):
+                self._lock_waiting = True
+                print("kb7: interface 1 locked by another writer, pausing frames",
+                      file=sys.stderr, flush=True)
+            return False
+        except OSError as e:
+            print(f"kb7: stream lock {STREAM_LOCK} failed: {e} (backing off {STREAM_BACKOFF:.0f}s)",
+                  file=sys.stderr, flush=True)
+            self._stream_backoff_until = time.monotonic() + STREAM_BACKOFF
+            return False
+        if getattr(self, "_lock_waiting", False):
+            self._lock_waiting = False
+            print("kb7: interface 1 free again, resuming frames", file=sys.stderr, flush=True)
+        return True
+
+    def _stream_frame(self, body, now):
         starting = now - self._last_stream > STREAM_IDLE_RESTART
         self._last_stream = now
         self._stream_drain()
+        acked = False
         for pkt in stream_packets(bytes(body)):
             try:
                 os.write(self._stream_fd, b"\x00" + pkt)   # report ID 0: interface has none
@@ -501,7 +536,7 @@ class Keyboard:
                 self._direct_mode(False)
             except OSError:
                 pass
-        for fd in (self.fd, self._stream_fd):
+        for fd in (self.fd, self._stream_fd, getattr(self, "_lock_fd", None)):
             if fd is None:
                 continue
             try:
