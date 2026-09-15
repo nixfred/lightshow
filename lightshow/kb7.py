@@ -59,6 +59,26 @@ B7_CUSTOM = 0x0B
 # seconds. Applying a look (static, breathe, wave, off) is never throttled.
 FRAME_MIN_INTERVAL = 5.0
 
+# Live effect stream on USB interface 1 (vendor page 0xFF00, 64-byte IN/OUT,
+# no report IDs), captured from Swarm II on firmware 1.37 (2026-09-15):
+#   one frame = 360 colour bytes; key position p (same p as the 0x11 record)
+#   has R at 4+p, G at 4+p+16, B at 4+p+32
+#   sent as 6 packets: a1 <seq 1..6> <len16 LE: 68 01 on seq 1, 00 00 after> <60 bytes>
+#   the keyboard acks every packet with 32 <seq> on the IN endpoint
+#   Swarm ran it at ~20 fps. It is not the persistent record: no flash wear.
+STREAM_INTERFACE = 1
+STREAM_BODY = 360
+STREAM_OFFSET = 4
+STREAM_CHUNK = 60
+STREAM_MIN_INTERVAL = 0.05   # cap at 20 fps, what Swarm used
+STREAM_ACK_TIMEOUT = 0.1     # seconds to wait for each 32 <seq> ack
+# The first packet of a stream is acked slowly: Swarm's own a1 01 on fw 1.37
+# took 230 ms (the board switching into live-lighting mode), every later ack
+# about 2 ms. A stream counts as starting after STREAM_IDLE_RESTART of silence.
+STREAM_FIRST_ACK_TIMEOUT = 1.0
+STREAM_IDLE_RESTART = 1.0
+STREAM_BACKOFF = 10.0        # stop streaming this long after a missed ack
+
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
 SELECT_POLL = 0.15           # Swarm's own select polling cadence
 BACKOFF_AFTER_FAILURE = 10.0 # leave a wedged handler alone to recover
@@ -88,6 +108,35 @@ def find_control_node():
         if phys and phys[0].endswith(f"/input{CONTROL_INTERFACE}"):
             return "/dev/" + uevent.split("/")[4]
     return None
+
+
+def find_stream_node():
+    """hidraw node for the KB7's effect-stream interface (USB interface 1), or None."""
+    want = f"HID_ID=0003:0000{VID}:0000{PID}"
+    for uevent in sorted(glob.glob("/sys/class/hidraw/hidraw*/device/uevent")):
+        try:
+            txt = open(uevent).read()
+        except OSError:
+            continue
+        if want not in txt.upper():
+            continue
+        phys = [l for l in txt.splitlines() if l.startswith("HID_PHYS=")]
+        if phys and phys[0].endswith(f"/input{STREAM_INTERFACE}"):
+            return "/dev/" + uevent.split("/")[4]
+    return None
+
+
+def stream_packets(body):
+    """Split a 360-byte frame into Swarm's six 64-byte a1 packets."""
+    assert len(body) == STREAM_BODY
+    packets = []
+    for i in range(STREAM_BODY // STREAM_CHUNK):
+        seq = i + 1
+        length = STREAM_BODY if seq == 1 else 0
+        chunk = body[i * STREAM_CHUNK:(i + 1) * STREAM_CHUNK]
+        # little-endian: Swarm's first packet starts a1 01 68 01 (0x0168 = 360)
+        packets.append(bytes([0xA1, seq, length & 0xFF, length >> 8]) + chunk)
+    return packets
 
 
 def load_positions():
@@ -135,6 +184,13 @@ class Keyboard:
         self._brightness_before_off = None
         self._last_set = 0.0
         self._backoff_until = 0.0
+        self._stream_fd = None
+        self._stream_node = None
+        self._last_stream = 0.0
+        self._stream_backoff_until = 0.0
+        self._stream_announced = False
+        self._direct = False          # 0E 05 01 active: the board accepts streamed frames
+        self._frames_without_ack = 0
 
     # -- raw feature reports --------------------------------------------
 
@@ -266,6 +322,12 @@ class Keyboard:
         else:
             rgb = (0, 0, 0)
         masks = [m for m in ZONE_MASKS if zone_mask & m]
+        # A hardware look owns the keys again: leave direct (streamed) mode first.
+        if self._direct:
+            try:
+                self._direct_mode(False)
+            except OSError as e:
+                print(f"kb7: could not leave direct mode: {e}", file=sys.stderr, flush=True)
         if mode == MODE_OFF:
             # No captured "off" mode byte: static at brightness 0 is a field
             # we have seen the board honour. Remember the level to come back to.
@@ -303,14 +365,146 @@ class Keyboard:
         zone_colours = {m: bright[i % len(bright)] for i, m in enumerate(ZONE_MASKS)}
         self._write(zone_colours, KB7_MODE[MODE_STATIC],
                     brightness=self._restore_brightness())
+        # Then hand the keys to the live stream (OpenRGB's EnableDirect + WaitUntilReady).
+        if os.environ.get("LIGHTSHOW_KB7_STREAM", "1") != "0":
+            self._direct_mode(True)
+
+    def _direct_mode(self, on):
+        """0E 05 01 = direct (host-streamed) lighting, 0E 05 00 = off.
+
+        Captured working on fw 1.37 (2026-09-15): direct on, poll GET 0x05
+        until byte 1 == 1, then stream; 1329 of 1362 packets acked. With it
+        off the board takes the frames but never answers or shows them.
+        On fw 1.22 direct mode also switched on the analog key-travel stream,
+        which made a resting finger repeat a key, so it is only on while a
+        software effect runs.
+        """
+        if on == self._direct:
+            return
+        self._set(bytes([0x0E, 0x05, 0x01 if on else 0x00, 0x00, 0x00]))
+        self._direct = on
+        print(f"kb7: direct mode {'ON' if on else 'OFF'}", file=sys.stderr, flush=True)
+        if on:
+            end = time.monotonic() + 5.0
+            while time.monotonic() < end:
+                time.sleep(SELECT_POLL)
+                if self._get(SELECT_REPORT, 3)[1] == 0x01:
+                    break
+            self._frames_without_ack = 0
+            self._stream_backoff_until = 0.0
+            self._last_stream = 0.0
+
+    def _open_stream(self):
+        if self._stream_fd is not None:
+            return True
+        node = find_stream_node()
+        if not node:
+            return False
+        try:
+            self._stream_fd = os.open(node, os.O_RDWR | os.O_NONBLOCK)
+        except OSError as e:
+            print(f"kb7: cannot open stream node {node}: {e}", file=sys.stderr, flush=True)
+            self._stream_backoff_until = time.monotonic() + STREAM_BACKOFF
+            return False
+        self._stream_node = node
+        return True
+
+    def _stream_drain(self):
+        """Discard anything already waiting on the stream IN endpoint, so a late
+        ack from an earlier timed-out packet cannot pass for the next one."""
+        while True:
+            try:
+                if not os.read(self._stream_fd, 65):
+                    return
+            except (BlockingIOError, OSError):
+                return
+
+    def _stream_ack(self, seq, timeout=STREAM_ACK_TIMEOUT):
+        """Wait for the keyboard's 32 <seq> ack. True if it arrived."""
+        import select
+        end = time.monotonic() + timeout
+        while True:
+            left = end - time.monotonic()
+            if left <= 0:
+                return False
+            r, _, _ = select.select([self._stream_fd], [], [], left)
+            if not r:
+                return False
+            try:
+                data = os.read(self._stream_fd, 65)
+            except BlockingIOError:
+                continue
+            if len(data) >= 2 and data[0] == 0x32 and data[1] == seq:
+                return True
+            # anything else (another report) is not our ack; keep waiting
 
     def frame(self, colors):
-        """Software-effect frames are never written to the KB7: its colour
-        lives in persistent storage. begin_software() already painted it."""
-        return
+        """One software-effect frame, streamed live on interface 1.
+
+        Never touches the persistent 0x11 record. Capped at 20 fps; a missing
+        ack stops streaming for STREAM_BACKOFF seconds and the board keeps the
+        still look begin_software() saved.
+        """
+        # LIGHTSHOW_KB7_STREAM=0 keeps interface 1 silent (e.g. while a screen
+        # image upload uses the same pipe); the still look stays on the keys.
+        if os.environ.get("LIGHTSHOW_KB7_STREAM", "1") == "0" or not self._direct:
+            return
+        now = time.monotonic()
+        if now < self._stream_backoff_until or now - self._last_stream < STREAM_MIN_INTERVAL:
+            return
+        if now - self._last_set < SETTLE_AFTER_SET:   # never straight after a record write
+            return
+        if not self._open_stream():
+            return
+        body = bytearray(STREAM_BODY)
+        for mask, rgb in zip(ZONE_MASKS, colors):
+            r, g, b = (max(0, min(255, int(c))) for c in rgb)
+            for key in self.zones.get(mask, ()):
+                p = self.positions.get(key)
+                if p is None:
+                    continue
+                base = STREAM_OFFSET + p
+                body[base], body[base + 16], body[base + 32] = r, g, b
+        starting = now - self._last_stream > STREAM_IDLE_RESTART
+        self._last_stream = now
+        self._stream_drain()
+        for pkt in stream_packets(bytes(body)):
+            try:
+                os.write(self._stream_fd, b"\x00" + pkt)   # report ID 0: interface has none
+            except OSError as e:
+                print(f"kb7: stream write failed: {e} (backing off {STREAM_BACKOFF:.0f}s)",
+                      file=sys.stderr, flush=True)
+                self._stream_backoff_until = time.monotonic() + STREAM_BACKOFF
+                return
+            # Acks are counted, not required: OpenRGB's SendColors ignores them,
+            # and the board acked ~98% in the working capture (the first after ~0.9 s).
+            wait = STREAM_FIRST_ACK_TIMEOUT if (starting and pkt[1] == 1) else 0.02
+            acked = self._stream_ack(pkt[1], wait)
+            if acked:
+                self._frames_without_ack = 0
+        if not acked:
+            self._frames_without_ack += 1
+            if self._frames_without_ack >= int(3.0 / STREAM_MIN_INTERVAL):
+                print(f"kb7: no stream acks for 3 s, the board is not taking frames "
+                      f"(backing off {STREAM_BACKOFF:.0f}s)", file=sys.stderr, flush=True)
+                self._stream_backoff_until = time.monotonic() + STREAM_BACKOFF
+                self._frames_without_ack = 0
+                return
+        if not self._stream_announced:
+            self._stream_announced = True
+            print(f"kb7: streaming effect frames on {self._stream_node}", file=sys.stderr, flush=True)
 
     def close(self):
-        try:
-            os.close(self.fd)
-        except OSError:
-            pass
+        # Never leave the board in direct mode: on fw 1.22 it repeated resting keys.
+        if self._direct:
+            try:
+                self._direct_mode(False)
+            except OSError:
+                pass
+        for fd in (self.fd, self._stream_fd):
+            if fd is None:
+                continue
+            try:
+                os.close(fd)
+            except OSError:
+                pass

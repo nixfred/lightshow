@@ -99,12 +99,20 @@ def main():
             return 1
         print(f"LightShow daemon on 127.0.0.1:{args.port}")
         print("  device " + engine.kb.node)
+        # systemd stops the service with SIGTERM; turn it into a clean exit so
+        # the boards are closed (the KB7 must leave direct mode on the way out).
+        import signal
+        signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
             pass
         finally:
             engine.shutdown()
+            try:
+                engine.kb.close()
+            except Exception as e:
+                print(f"lightshow: closing boards failed: {e}", file=sys.stderr, flush=True)
         return 0
 
     if args.action == "gui":

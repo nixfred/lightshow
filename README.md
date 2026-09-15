@@ -124,12 +124,18 @@ KB7 key groups:
 
 What it does, and what it deliberately does not:
 
-- **Static, breathe and wave** run on the keyboard's own microcontroller. LightShow
-  writes one record when you apply the look and nothing after that.
-- **The record is persistent storage**, and nobody knows whether the firmware
-  commits every write to flash. So software effects do **not** animate on the KB7:
-  a record is written only when the set of colours changes, and never more than
-  once every 5 seconds. The MSI board keeps animating as usual.
+- **Static and breathe** run on the keyboard's own microcontroller. LightShow
+  writes one record when you apply the look and nothing after that. Wave shows as
+  static until its mode byte is captured.
+- **Software effects animate live** (firmware 1.37). LightShow switches the KB7 into
+  direct mode, waits until it reports ready, and streams frames on USB interface 1
+  at up to 20 fps. Frames never touch the persistent record, so there is no flash
+  wear. Picking a static look, or stopping LightShow, switches direct mode off.
+- **Before streaming starts**, the effect's colours are saved once as a still look,
+  so the keys still show something sensible if the stream stops.
+- **Direct mode and typing:** on firmware 1.22, direct mode made a key resting under
+  a finger repeat. It is only on while a software effect runs; pick a static look if
+  you ever see repeats.
 - **Only the active profile** is written, using the board's own record as the
   template, so speed, brightness and unused LED slots stay exactly as they were.
 - **Requests are paced.** On firmware 1.22 a read that follows a write within a few
