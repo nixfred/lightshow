@@ -40,7 +40,7 @@ If both are plugged in, LightShow drives both at once.
 | `1462:1601` | MSI Katana 15 HX (MS-1565) | 🟡 Reported — untested here |
 | `1462:1562/3/4` | MSI Delta 15, Alpha 15/17 | 🟡 Reported — untested here |
 | anything else reporting `MysticLight` | unlisted MSI laptops | 🔵 Auto-detected, worth trying |
-| `10f5:5038` | Turtle Beach Command Series KB7 (firmware 1.22) | ✅ **Verified** — per-key backlight, see [below](#turtle-beach-kb7) |
+| `10f5:5038` | Turtle Beach Command Series KB7 (firmware 1.22 and 1.37) | ✅ **Verified** — per-key backlight, see [below](#turtle-beach-kb7) |
 
 Detection matches the HID **product string**, not a hardcoded product ID, so models
 nobody has catalogued are picked up automatically. If yours reports a different
