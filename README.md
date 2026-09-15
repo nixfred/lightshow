@@ -147,6 +147,11 @@ What it does, and what it deliberately does not:
   labels on the same node), then reopens it and puts the current look back. No
   restart needed. Proven with a software replug (`authorized` 0/1 in sysfs):
   unplug seen, reopened 14 s later, look back on the keys one second after.
+- **Sharing the board with another tool.** Two advisory lock files in
+  `$XDG_RUNTIME_DIR` let a second program coexist: `kb7-control.lock` is held for
+  one control-interface transaction at a time (a read; a write plus its 300 ms
+  settle; a whole select-and-read), `kb7-iface1.lock` for one streamed frame or one
+  screen-image upload. Take them the same way and the two never interleave.
 - The screen, tile labels and firmware updates are out of scope.
 
 The record layout was captured from Turtle Beach's Swarm II driving a KB7 on

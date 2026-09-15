@@ -27,6 +27,7 @@ effects that need per-frame colour belong on the interface-1 PWM stream, which
 is not decoded yet.
 """
 
+import contextlib
 import errno
 import fcntl
 import glob
@@ -85,6 +86,14 @@ STREAM_BACKOFF = 10.0        # stop streaming this long after a missed ack
 # same interface-1 node, so both sides take this flock around their writes.
 STREAM_LOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"),
                            "kb7-iface1.lock")
+# Same idea for the control interface: kb7ctl's status board rewrites the screen
+# labels every few seconds on the same node. Whoever talks to it holds this for
+# one transaction (a GET; a SET plus its settle; a whole select+poll+read), never
+# across an idle wait. Two processes can then never land a GET inside the other's
+# settle window, which is exactly what wedged the fw 1.22 handler.
+CONTROL_LOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}"),
+                            "kb7-control.lock")
+CONTROL_LOCK_WAIT = 5.0      # the other writer's longest transaction is ~1 s
 
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
 # After a replug, leave the fresh board alone this long before reopening it:
@@ -199,7 +208,10 @@ class Keyboard:
         self._instance = _instance(node)
         self._gone = False         # a request hit ENODEV: the board was unplugged
         self._seen_new = None      # (instance, when) of a board waiting out HOTPLUG_GRACE
-        self._io = threading.Lock()   # one feature request at a time, pacing included
+        self._io = threading.RLock()  # one transaction at a time in this process
+        self._txn_depth = 0
+        self._ctl_lock_fd = None      # CONTROL_LOCK, opened on first use
+        self._ctl_lock_warned = False
         self._reset_state()
 
     def _reset_state(self):
@@ -361,8 +373,49 @@ class Keyboard:
         if wait > 0:
             time.sleep(wait)
 
-    def _get(self, rid, n):
+    def _ctl_flock(self, on):
+        """Cross-process half of the transaction lock; degrades to in-process
+        only (with one warning) if the lock file cannot be used."""
+        if self._ctl_lock_fd is None:
+            try:
+                self._ctl_lock_fd = os.open(CONTROL_LOCK, os.O_RDWR | os.O_CREAT, 0o644)
+            except OSError as e:
+                if not self._ctl_lock_warned:
+                    self._ctl_lock_warned = True
+                    print(f"kb7: no control lock {CONTROL_LOCK} ({e}); other writers are not fenced",
+                          file=sys.stderr, flush=True)
+                return
+        if not on:
+            fcntl.flock(self._ctl_lock_fd, fcntl.LOCK_UN)
+            return
+        end = time.monotonic() + CONTROL_LOCK_WAIT
+        while True:
+            try:
+                fcntl.flock(self._ctl_lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                return
+            except BlockingIOError:
+                if time.monotonic() > end:
+                    raise OSError(f"KB7 control node busy: {CONTROL_LOCK} held for over "
+                                  f"{CONTROL_LOCK_WAIT:.0f}s by another process")
+                time.sleep(0.02)
+
+    @contextlib.contextmanager
+    def _transaction(self):
+        """One control-node transaction: re-entrant within a thread, exclusive
+        across threads and processes."""
         with self._io:
+            if self._txn_depth == 0:
+                self._ctl_flock(True)
+            self._txn_depth += 1
+            try:
+                yield
+            finally:
+                self._txn_depth -= 1
+                if self._txn_depth == 0:
+                    self._ctl_flock(False)
+
+    def _get(self, rid, n):
+        with self._transaction():
             return self._get_locked(rid, n)
 
     def _get_locked(self, rid, n):
@@ -383,8 +436,9 @@ class Keyboard:
         return bytes(buf)
 
     def _set(self, data):
-        with self._io:
+        with self._transaction():
             self._set_locked(data)
+            time.sleep(SETTLE_AFTER_SET)   # the settle is part of the transaction
 
     def _set_locked(self, data):
         self._pace()
@@ -409,6 +463,11 @@ class Keyboard:
         return self._get(PROFILE_REPORT, 3)[2]
 
     def _read_light_record(self, profile):
+        # One transaction: the select is board state another process could clobber.
+        with self._transaction():
+            return self._read_light_record_locked(profile)
+
+    def _read_light_record_locked(self, profile):
         self._set(bytes([SELECT_REPORT, profile & 0xFF, SELECT_LIGHT, 0x00]))
         for _ in range(20):
             time.sleep(SELECT_POLL)
@@ -731,7 +790,7 @@ class Keyboard:
                 self._direct_mode(False)
             except OSError:
                 pass
-        for fd in (self.fd, self._stream_fd, getattr(self, "_lock_fd", None)):
+        for fd in (self.fd, self._stream_fd, getattr(self, "_lock_fd", None), self._ctl_lock_fd):
             if fd is None:
                 continue
             try:
