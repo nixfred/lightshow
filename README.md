@@ -120,7 +120,7 @@ KB7 key groups:
 | WASD (mask 1) | W A S D |
 | Main block (mask 2) | letters, numbers, F-row, modifiers, Space |
 | Nav (mask 4) | the arrow cluster and the keys beside it |
-| Numpad (mask 8) | the ten-LED light strip and the media row (the KB7 has no numpad) |
+| Numpad (mask 8) | the 37-LED light bar along the front edge and the media row (the KB7 has no numpad) |
 
 What it does, and what it deliberately does not:
 
