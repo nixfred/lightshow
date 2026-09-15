@@ -99,7 +99,8 @@ CONTROL_LOCK_WAIT = 5.0      # the other writer's longest transaction is ~1 s
 # press. 0 = never poll (events still work). Keep control traffic low: key
 # repeats were seen 2026-09-15 while another tool wrote labels every 5 s.
 PROFILE_BACKSTOP = float(os.environ.get("LIGHTSHOW_KB7_PROFILE_POLL", "20"))
-TYPING_IDLE = 2.0            # no key reports for this long before a backstop read
+TYPING_IDLE = 2.0            # no key reports for this long before a read or write
+TYPING_WAIT_MAX = 10.0       # a write waits at most this long for silence, then goes
 
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
 # After a replug, leave the fresh board alone this long before reopening it:
@@ -216,6 +217,9 @@ class Keyboard:
         self._seen_new = None      # (instance, when) of a board waiting out HOTPLUG_GRACE
         self._io = threading.RLock()  # one transaction at a time in this process
         self._txn_depth = 0
+        self._txn_owner = None        # thread ident holding the outermost transaction
+        self._ev_lock = threading.Lock()
+        self._pending = set()         # button events drained but not yet consumed
         self._ctl_lock_fd = None      # CONTROL_LOCK, opened on first use
         self._ctl_lock_warned = False
         self._reset_state()
@@ -290,9 +294,18 @@ class Keyboard:
         (0x81) is the firmware profile switch and is followed by `03 00 31 ..`;
         button 4 (0x83) dims the lights in firmware. Decoded from counted
         presses on fw 1.37, 2026-09-15."""
-        seen = set()
         if self.fd is None or self._gone:
-            return seen
+            return
+        with self._ev_lock:
+            self._drain_events_locked()
+
+    def _take_events(self):
+        with self._ev_lock:
+            seen, self._pending = self._pending, set()
+        return seen
+
+    def _drain_events_locked(self):
+        seen = self._pending
         for _ in range(64):
             try:
                 ready, _, _ = select.select([self.fd], [], [], 0)
@@ -318,7 +331,6 @@ class Keyboard:
                 seen.add("profile")
             elif rep[2] == 0x02 and rep[3] == 0x83 and rep[4] == 0x01:
                 seen.add("dim")
-        return seen
 
     def poll_profile(self):
         """True when the board's active profile is no longer the one the look
@@ -332,7 +344,8 @@ class Keyboard:
         """
         if self._gone or self._profile is None or self._direct:
             return False
-        events = self._drain_events()
+        self._drain_events()
+        events = self._take_events()
         if "dim" in events:
             # Firmware changed the brightness: the cached record is stale, so the
             # next write re-reads the board's record instead of restoring the old level.
@@ -421,13 +434,27 @@ class Keyboard:
         with self._io:
             if self._txn_depth == 0:
                 self._ctl_flock(True)
+                self._txn_owner = threading.get_ident()
             self._txn_depth += 1
             try:
                 yield
             finally:
                 self._txn_depth -= 1
                 if self._txn_depth == 0:
+                    self._txn_owner = None
                     self._ctl_flock(False)
+
+    def _wait_typing_idle(self):
+        """Block until the board has sent no key reports for TYPING_IDLE, or
+        TYPING_WAIT_MAX has passed. Called before a transaction, never inside
+        one: the lock is not held while waiting."""
+        end = time.monotonic() + TYPING_WAIT_MAX
+        while True:
+            self._drain_events()
+            idle = time.monotonic() - self._last_key_report
+            if idle >= TYPING_IDLE or time.monotonic() >= end:
+                return
+            time.sleep(min(0.1, TYPING_IDLE - idle))
 
     def _get(self, rid, n):
         with self._transaction():
@@ -451,6 +478,11 @@ class Keyboard:
         return bytes(buf)
 
     def _set(self, data):
+        # A write while Fred types delays a key release and the host repeats the
+        # key (seen 2026-09-15 with another tool's writes); wait for silence first,
+        # unless this thread is already inside a transaction (its caller waited).
+        if self._txn_owner != threading.get_ident():
+            self._wait_typing_idle()
         with self._transaction():
             self._set_locked(data)
             time.sleep(SETTLE_AFTER_SET)   # the settle is part of the transaction
@@ -479,6 +511,8 @@ class Keyboard:
 
     def _read_light_record(self, profile):
         # One transaction: the select is board state another process could clobber.
+        if self._txn_owner != threading.get_ident():
+            self._wait_typing_idle()
         with self._transaction():
             return self._read_light_record_locked(profile)
 
