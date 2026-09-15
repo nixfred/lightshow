@@ -314,17 +314,25 @@ class Keyboard:
             # next write re-reads the board's record instead of restoring the old level.
             self._template = None
         now = time.monotonic()
-        if "profile" in events:
-            time.sleep(0.3)               # let the firmware finish the switch
-        elif now - self._last_profile_check < 4.0:
+        if "profile" not in events and now - self._last_profile_check < 4.0:
             return False
         if now < self._backoff_until:
             return False
         self._last_profile_check = now
-        try:
-            active = self._active_profile()
-        except OSError:
-            return False
+        # After the profile key the firmware takes a moment: a single read 300 ms
+        # after the press still showed the old profile twice (2026-09-15 14:26),
+        # so keep reading every 300 ms for up to 3 s until it has moved.
+        tries = 10 if "profile" in events else 1
+        active = self._profile
+        for _ in range(tries):
+            if tries > 1:
+                time.sleep(0.3)
+            try:
+                active = self._active_profile()
+            except OSError:
+                return False
+            if active != self._profile:
+                break
         if active == self._profile:
             return False
         print(f"kb7: active profile changed {self._profile} -> {active}, giving it the look",
