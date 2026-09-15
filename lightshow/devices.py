@@ -58,6 +58,20 @@ class Fanout:
                     print(f"lightshow: {b.node} begin_software failed: {type(e).__name__}: {e}",
                           file=sys.stderr, flush=True)
 
+    def poll_hotplug(self):
+        """True when a board came back after a replug and wants the look re-applied."""
+        back = False
+        for b in self.boards:
+            poll = getattr(b, "poll_hotplug", None)
+            if not poll:
+                continue
+            try:
+                back = poll() or back
+            except Exception as e:
+                print(f"lightshow: {b.node} poll_hotplug crashed: {type(e).__name__}: {e}",
+                      file=sys.stderr, flush=True)
+        return back
+
     def close(self):
         for b in self.boards:
             b.close()

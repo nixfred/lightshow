@@ -27,6 +27,7 @@ effects that need per-frame colour belong on the interface-1 PWM stream, which
 is not decoded yet.
 """
 
+import errno
 import fcntl
 import glob
 import json
@@ -84,6 +85,10 @@ STREAM_LOCK = os.path.join(os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.get
                            "kb7-iface1.lock")
 
 SETTLE_AFTER_SET = 0.3       # seconds between any SET and the next request
+# After a replug, leave the fresh board alone this long before reopening it:
+# a plug-time helper (kb7-plug.service writes the tile labels, ~4 s) must be
+# done with the control node first. Only one process may talk to it.
+HOTPLUG_GRACE = 10.0
 SELECT_POLL = 0.15           # Swarm's own select polling cadence
 BACKOFF_AFTER_FAILURE = 10.0 # leave a wedged handler alone to recover
 
@@ -112,6 +117,15 @@ def find_control_node():
         if phys and phys[0].endswith(f"/input{CONTROL_INTERFACE}"):
             return "/dev/" + uevent.split("/")[4]
     return None
+
+
+def _instance(node):
+    """The HID instance behind a hidraw node (e.g. 0003:10F5:5038.003B); it changes
+    on every enumeration, so it tells a replugged board from the one we opened."""
+    try:
+        return os.path.basename(os.readlink(f"/sys/class/hidraw/{os.path.basename(node)}/device"))
+    except OSError:
+        return None
 
 
 def find_stream_node():
@@ -180,6 +194,12 @@ class Keyboard:
                 "/etc/udev/rules.d/60-turtle-beach-kb7.rules") from e
         self.node = node
         self.positions, self.zones = load_positions()
+        self._instance = _instance(node)
+        self._gone = False         # a request hit ENODEV: the board was unplugged
+        self._seen_new = None      # (instance, when) of a board waiting out HOTPLUG_GRACE
+        self._reset_state()
+
+    def _reset_state(self):
         self._template = None      # the board's own record, read once per profile
         self._profile = None
         self._last_written = None
@@ -196,6 +216,50 @@ class Keyboard:
         self._direct = False          # 0E 05 01 active: the board accepts streamed frames
         self._yielded = False         # direct mode dropped while kb7ctl holds interface 1
         self._frames_without_ack = 0
+
+    # -- hot-plug ----------------------------------------------------------
+
+    def _mark_gone(self):
+        if not self._gone:
+            self._gone = True
+            print("kb7: board unplugged, waiting for it to come back", file=sys.stderr, flush=True)
+
+    def poll_hotplug(self):
+        """Called every few seconds. Reopens the board after a replug and returns
+        True once, so the caller can re-apply the current look. The fresh board
+        is left alone for HOTPLUG_GRACE first (see the constant)."""
+        node = find_control_node()
+        inst = _instance(node) if node else None
+        if inst is None:
+            self._mark_gone()
+            self._seen_new = None
+            return False
+        if inst == self._instance and not self._gone:
+            return False
+        now = time.monotonic()
+        if self._seen_new is None or self._seen_new[0] != inst:
+            self._seen_new = (inst, now)
+            return False
+        if now - self._seen_new[1] < HOTPLUG_GRACE:
+            return False
+        for fd in (self.fd, self._stream_fd):
+            if fd is not None:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+        self.fd = self._stream_fd = None
+        try:
+            self.fd = os.open(node, os.O_RDWR)
+        except OSError as e:
+            print(f"kb7: back on {node} but cannot open it: {e}; retrying in {HOTPLUG_GRACE:.0f}s",
+                  file=sys.stderr, flush=True)
+            self._seen_new = (inst, now)
+            return False
+        self.node, self._instance, self._gone, self._seen_new = node, inst, False, None
+        self._reset_state()
+        print(f"kb7: back on {node}, reopened", file=sys.stderr, flush=True)
+        return True
 
     # -- raw feature reports --------------------------------------------
 
@@ -220,8 +284,12 @@ class Keyboard:
         buf = bytearray(n + 1)
         buf[0] = rid
         try:
+            if self.fd is None:
+                raise OSError(errno.ENODEV, "KB7 unplugged")
             fcntl.ioctl(self.fd, _ioc(3, "H", 0x07, n + 1), buf, True)
         except OSError as e:
+            if e.errno in (errno.ENODEV, errno.ENXIO):
+                self._mark_gone()
             self._backoff_until = time.monotonic() + BACKOFF_AFTER_FAILURE
             print(f"kb7: GET 0x{rid:02x} failed: {e} (backing off {BACKOFF_AFTER_FAILURE:.0f}s)",
                   file=sys.stderr, flush=True)
@@ -232,8 +300,12 @@ class Keyboard:
         self._pace()
         buf = bytearray(data)
         try:
+            if self.fd is None:
+                raise OSError(errno.ENODEV, "KB7 unplugged")
             fcntl.ioctl(self.fd, _ioc(3, "H", 0x06, len(buf)), buf, True)
         except OSError as e:
+            if e.errno in (errno.ENODEV, errno.ENXIO):
+                self._mark_gone()
             self._backoff_until = time.monotonic() + BACKOFF_AFTER_FAILURE
             print(f"kb7: SET 0x{buf[0]:02x} failed: {e} (backing off {BACKOFF_AFTER_FAILURE:.0f}s)",
                   file=sys.stderr, flush=True)
@@ -468,6 +540,8 @@ class Keyboard:
         # LIGHTSHOW_KB7_STREAM=0 keeps interface 1 silent (e.g. while a screen
         # image upload uses the same pipe); the still look stays on the keys.
         if os.environ.get("LIGHTSHOW_KB7_STREAM", "1") == "0" or not (self._direct or self._yielded):
+            return
+        if self._gone:
             return
         now = time.monotonic()
         if now < self._stream_backoff_until or now - self._last_stream < STREAM_MIN_INTERVAL:
