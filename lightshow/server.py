@@ -61,6 +61,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self._send(500, {"error": "ui.html missing"})
         if self.path == "/api/state":
             return self._send(200, engine.snapshot())
+        if self.path == "/api/frame":
+            # The colours on the keys right now; cheap enough to poll a few
+            # times a second for a live preview.
+            return self._send(200, {"frame": engine.frame()})
         return self._send(404, {"error": "not found"})
 
     def do_POST(self):
@@ -68,35 +72,6 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if self.path == "/api/apply":
                 return self._send(200, {"ok": True, "current": engine.apply(body)})
-
-            if self.path == "/api/favorite/save":
-                name = engine.save_favorite(body.get("name"))
-                return self._send(200, {"ok": True, "name": name,
-                                        "favorites": engine.cfg["favorites"]})
-
-            if self.path == "/api/favorite/load":
-                engine.load_favorite(body.get("name"))
-                return self._send(200, {"ok": True, "current": engine.cfg["current"]})
-
-            if self.path == "/api/favorite/delete":
-                engine.delete_favorite(body.get("name"))
-                return self._send(200, {"ok": True,
-                                        "favorites": engine.cfg["favorites"]})
-
-            if self.path == "/api/profile/save":
-                engine.save_profile(body.get("which"))
-                return self._send(200, {"ok": True,
-                                        "profiles": engine.cfg["profiles"]})
-
-            if self.path == "/api/profile/load":
-                engine.load_profile(body.get("which"))
-                return self._send(200, {"ok": True, "current": engine.cfg["current"]})
-
-            if self.path == "/api/schedule":
-                engine.set_schedule(body.get("enabled"), body.get("day_at"),
-                                    body.get("night_at"))
-                return self._send(200, {"ok": True,
-                                        "schedule": engine.cfg["schedule"]})
 
             if self.path == "/api/quit":
                 self._send(200, {"ok": True})

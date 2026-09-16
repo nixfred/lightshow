@@ -19,23 +19,13 @@
     color:var(--fg); font:14px/1.5 "JetBrains Mono","Fira Code",ui-monospace,monospace;
     height:100vh; overflow:hidden; padding:14px 16px;
   }
-  /* The page never scrolls. A wide left pane holds the zones, effects and the
-     favourites list (the one thing that scrolls, in place); every setting sits
-     in the fixed rail on the right. */
-  .wrap{max-width:1500px;margin:0 auto;height:100%;display:flex;flex-direction:column}
-  .main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 420px;gap:14px}
-  .left,.rail{display:flex;flex-direction:column;gap:12px;min-height:0}
-  .left section,.rail section{margin:0}
-  .favs{flex:1;min-height:120px;display:flex;flex-direction:column}
-  .favs .list{flex:1;min-height:0;overflow:auto;align-content:flex-start}
-  h2.split{display:flex;justify-content:space-between;align-items:center}
-  h2.split .toggle{letter-spacing:.1em}
-  .pl{min-width:64px}
-  .rail .row + .row{margin-top:8px}
+  /* The page never scrolls. One column: the colours on the keys, the theme
+     palette they come from, and the effects. Nothing else to set. */
+  .wrap{max-width:1400px;margin:0 auto;height:100%;display:flex;flex-direction:column;gap:12px}
   /* The Omarchy chamfer: a bevelled corner, used on every surface. */
   .cham{clip-path:polygon(var(--chamfer) 0,100% 0,100% calc(100% - var(--chamfer)),calc(100% - var(--chamfer)) 100%,0 100%,0 var(--chamfer))}
 
-  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+  header{display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:6px}
   h1{font-size:22px;margin:0;letter-spacing:.16em;text-transform:uppercase;
      background:linear-gradient(92deg,var(--accent),var(--accent2) 60%,#ff7ac6);
      -webkit-background-clip:text;background-clip:text;color:transparent;
@@ -43,12 +33,12 @@
   .meta{color:var(--dim);font-size:12px}
   .meta b{color:var(--accent);font-weight:500}
 
-  section{background:var(--panel);border:1px solid var(--line);padding:16px;margin-bottom:16px}
+  section{background:var(--panel);border:1px solid var(--line);padding:16px;margin:0}
   h2{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);
      margin:0 0 12px;font-weight:600}
 
   /* live zone preview */
-  .kbd{display:grid;grid-template-columns:1fr 2.2fr 1fr 1.2fr;gap:8px;margin-bottom:6px}
+  .kbd{display:grid;grid-template-columns:1fr 2.2fr 1fr 1.2fr;gap:8px;margin-bottom:12px}
   .zone{height:78px;border:1px solid var(--line);display:flex;flex-direction:column;
         justify-content:flex-end;padding:8px;position:relative;overflow:hidden;
         transition:background .12s linear,box-shadow .12s linear}
@@ -68,40 +58,11 @@
          text-transform:uppercase;opacity:.75}
 
   .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-  .row + .row{margin-top:12px}
   label{color:var(--dim);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
-
-  button{background:var(--panel2);border:1px solid var(--line);color:var(--fg);
-         font:inherit;font-size:12px;padding:8px 14px;cursor:pointer;transition:.14s}
-  button:hover{border-color:var(--accent);color:#fff}
-  button.primary{background:linear-gradient(96deg,var(--accent),var(--accent2));
-                 color:#0b0c12;font-weight:700;border:0}
-  button.danger:hover{border-color:#f7768e;color:#f7768e}
-
-  input[type=text],input[type=time]{background:#0c0e16;border:1px solid var(--line);
-    color:var(--fg);font:inherit;font-size:12px;padding:7px 10px}
-  input[type=color]{width:46px;height:32px;padding:0;border:1px solid var(--line);
-    background:#0c0e16;cursor:pointer}
-  input[type=range]{accent-color:var(--accent);width:190px}
-
-  .sw{width:26px;height:26px;border:1px solid #0006;cursor:pointer;transition:.12s}
-  .sw:hover{transform:scale(1.18);border-color:#fff}
+  .sw{width:22px;height:22px;border:1px solid #0006}
   .swatches{display:flex;flex-wrap:wrap;gap:5px}
-
-  .chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel2);
-        border:1px solid var(--line);padding:6px 10px;font-size:12px}
-  .chip button{padding:2px 7px;font-size:11px;background:transparent;border:0;color:var(--dim)}
-  .chip button:hover{color:#f7768e}
-  .chip .dot{width:10px;height:10px;border-radius:50%}
-
-  .toggle{display:inline-flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
-  .toggle input{accent-color:var(--accent);width:16px;height:16px}
-
-  .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}
-  @media(max-width:760px){.cols{grid-template-columns:1fr}.kbd{grid-template-columns:1fr 1fr}}
   .note{color:var(--dim);font-size:11px;line-height:1.5;margin-top:10px;
         border-left:2px solid var(--line);padding-left:10px}
-  .empty{color:var(--dim);font-size:12px;font-style:italic}
 </style>
 </head>
 <body>
@@ -112,22 +73,22 @@
     <div class="meta">
       for Omarchy &nbsp;·&nbsp; theme <b id="theme">…</b>
       &nbsp;·&nbsp; <span id="device">…</span>
-      &nbsp;·&nbsp; <span id="prof"></span>
     </div>
   </header>
 
-  <!-- The page never scrolls: wide left pane + settings rail. Only the
-       favourites list scrolls, in place. -->
-  <div class="main">
-  <div class="left">
-  <section class="cham" title="Four zone groups is everything the MS-1801 controller exposes. Individual keys cannot be addressed, so this preview is the real resolution of the hardware.">
-    <h2>Live zones</h2>
+  <section class="cham" title="The four zone groups both keyboards are driven in. This is what the keys show right now.">
+    <h2>On the keys now</h2>
     <div class="kbd">
       <div class="zone cham" id="z0"><span>WASD</span></div>
       <div class="zone cham" id="z1"><span>Main block</span></div>
       <div class="zone cham" id="z2"><span>Nav / arrows</span></div>
-      <div class="zone cham" id="z3"><span>Numpad</span></div>
+      <div class="zone cham" id="z3"><span>Numpad / strip</span></div>
     </div>
+    <div class="row">
+      <label>Theme palette</label>
+      <div class="swatches" id="palette"></div>
+    </div>
+    <div class="note" id="themeNote"></div>
   </section>
 
   <section class="cham">
@@ -135,67 +96,11 @@
     <div class="grid" id="fx"></div>
   </section>
 
-  <section class="cham favs">
-    <h2>Favourites</h2>
-    <div class="row">
-      <input type="text" id="favName" placeholder="name this look">
-      <button class="primary" id="favSave">Save current</button>
-    </div>
-    <div class="row list" id="favList"></div>
-  </section>
-  </div>
-
-  <div class="rail">
-    <section class="cham">
-      <h2>Colour</h2>
-      <div class="row">
-        <label>Theme</label>
-        <span id="themeState"></span>
-      </div>
-      <div class="swatches" id="palette"></div>
-      <div class="note" id="themeNote"></div>
-    </section>
-
-    <section class="cham">
-      <h2>Controls</h2>
-      <div class="row">
-        <label>Speed</label>
-        <input type="range" id="speed" min="0.1" max="3" step="0.05">
-        <span id="speedV" class="meta"></span>
-      </div>
-      <div class="row">
-        <label>Brightness</label>
-        <input type="range" id="bright" min="0.05" max="1" step="0.05">
-        <span id="brightV" class="meta"></span>
-      </div>
-      <div class="row" title="Scroll text shows one travelling pulse per letter. With four zones the letters cannot be drawn as shapes, so you are watching the word's rhythm cross the keyboard.">
-        <label>Scroll text</label>
-        <input type="text" id="word" maxlength="24" placeholder="OMARCHY">
-        <button id="doScroll">Scroll it</button>
-      </div>
-    </section>
-
-    <section class="cham" title="Auto-switch checks every 20 seconds and applies whichever profile the clock falls into.">
-      <h2 class="split">Day &amp; Night
-        <label class="toggle"><input type="checkbox" id="schedOn"> Auto-switch</label></h2>
-      <div class="row">
-        <label class="pl">☀ Day</label><input type="time" id="dayAt">
-        <button id="loadDay">Load</button><button id="saveDay">Save current</button>
-      </div>
-      <div class="row">
-        <label class="pl">☾ Night</label><input type="time" id="nightAt">
-        <button id="loadNight">Load</button><button id="saveNight">Save current</button>
-      </div>
-      <div class="row"><button id="schedSave">Apply schedule</button></div>
-    </section>
-  </div>
-  </div>
-
 </div>
 
 <script>
 let S = null;           // last server snapshot
-let local = {};         // pending edits before they are pushed
+let local = {};         // the current look
 
 const $ = id => document.getElementById(id);
 
@@ -216,7 +121,6 @@ async function refresh(){
 
 function push(patch){
   Object.assign(local, patch);
-  renderPreviewGuess();
   api('/api/apply', local).then(r => { if(r.current){ local = r.current; } render(); });
 }
 
@@ -225,9 +129,7 @@ function push(patch){
 function render(){
   $('theme').textContent = S.theme;
   $('device').textContent = S.device || 'no device';
-  $('prof').textContent = S.active_profile ? ('profile: ' + S.active_profile) : '';
 
-  // effects
   const fx = $('fx'); fx.innerHTML = '';
   S.effects.forEach(e => {
     const b = document.createElement('button');
@@ -238,9 +140,6 @@ function render(){
     fx.appendChild(b);
   });
 
-  // colour
-  $('themeState').textContent = S.theme;
-
   const pal = $('palette'); pal.innerHTML = '';
   Object.entries(S.theme_palette || {}).forEach(([name, hex]) => {
     const d = document.createElement('div');
@@ -249,41 +148,11 @@ function render(){
   });
   $('themeNote').textContent = 'Every look uses ' + S.theme + "'s colours. Switch your Omarchy theme and both keyboards follow.";
 
-  // sliders
-  $('speed').value = local.speed;   $('speedV').textContent  = (+local.speed).toFixed(2) + '×';
-  $('bright').value = local.brightness; $('brightV').textContent = Math.round(local.brightness*100) + '%';
-  $('word').value = local.word || '';
-
-  // favourites
-  const fl = $('favList'); fl.innerHTML = '';
-  const favs = Object.entries(S.favorites || {});
-  if(!favs.length){ fl.innerHTML = '<span class="empty">No favourites saved yet.</span>'; }
-  favs.forEach(([name, st]) => {
-    const c = document.createElement('span'); c.className = 'chip cham';
-    const dot = document.createElement('span'); dot.className = 'dot';
-    dot.style.background = (st.colors && st.colors[0]) || '#7aa2f7';
-    const lbl = document.createElement('button');
-    lbl.textContent = name + '  (' + st.effect + ')';
-    lbl.style.color = 'var(--fg)';
-    lbl.onclick = () => api('/api/favorite/load', {name}).then(refresh);
-    const del = document.createElement('button');
-    del.textContent = '✕';
-    del.onclick = () => api('/api/favorite/delete', {name}).then(refresh);
-    c.append(dot, lbl, del); fl.appendChild(c);
-  });
-
-  // schedule
-  const sc = S.schedule || {};
-  $('schedOn').checked = !!sc.enabled;
-  $('dayAt').value = sc.day_at || '07:00';
-  $('nightAt').value = sc.night_at || '20:00';
-
-  paintPreview(S.resolved_colors);
+  paintPreview(S.frame || S.resolved_colors);
 }
 
-// The preview shows the palette in play; software effects animate on the
-// hardware faster than we would want to poll, so this is a colour key rather
-// than a frame-accurate mirror.
+// The preview mirrors the daemon: /api/frame is the last frame written to the
+// keys, polled a few times a second while the page has focus.
 function paintPreview(cols){
   for(let i=0;i<4;i++){
     const el = $('z'+i);
@@ -292,37 +161,13 @@ function paintPreview(cols){
     el.style.boxShadow = 'inset 0 0 40px -6px #000, 0 0 26px -8px ' + c;
   }
 }
-function renderPreviewGuess(){
-  if(local.use_theme) return;
-  paintPreview(local.colors && local.colors.length ? local.colors : ['#7aa2f7']);
+async function pollFrame(){
+  if(!document.hasFocus()) return;
+  try { const r = await api('/api/frame'); if(r.frame) paintPreview(r.frame); } catch(e) {}
 }
 
-// ---- wiring ----------------------------------------------------------
-
-$('speed').oninput  = e => { $('speedV').textContent=(+e.target.value).toFixed(2)+'×'; };
-$('speed').onchange = e => push({speed: parseFloat(e.target.value)});
-$('bright').oninput  = e => { $('brightV').textContent=Math.round(e.target.value*100)+'%'; };
-$('bright').onchange = e => push({brightness: parseFloat(e.target.value)});
-$('doScroll').onclick = () => push({effect:'scroll', word: $('word').value || 'OMARCHY'});
-
-$('favSave').onclick = async () => {
-  const name = $('favName').value.trim();
-  if(!name){ $('favName').focus(); return; }
-  await api('/api/favorite/save', {name});
-  $('favName').value = ''; refresh();
-};
-
-$('saveDay').onclick   = () => api('/api/profile/save', {which:'day'}).then(refresh);
-$('saveNight').onclick = () => api('/api/profile/save', {which:'night'}).then(refresh);
-$('loadDay').onclick   = () => api('/api/profile/load', {which:'day'}).then(refresh);
-$('loadNight').onclick = () => api('/api/profile/load', {which:'night'}).then(refresh);
-$('schedSave').onclick = () => api('/api/schedule', {
-  enabled: $('schedOn').checked,
-  day_at: $('dayAt').value,
-  night_at: $('nightAt').value
-}).then(refresh);
-
 refresh();
+setInterval(pollFrame, 200);
 setInterval(() => { if(document.hasFocus()) refresh(); }, 15000);
 </script>
 </body>

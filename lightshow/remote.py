@@ -10,33 +10,34 @@ on purpose.
 """
 
 import json
+import threading
+import time
 import urllib.error
 import urllib.request
 
+from .kbd import hex_rgb
+
 TIMEOUT = 4
+FRAME_POLL = 0.15   # seconds between /api/frame reads for the live preview
 
 
 class RemoteEngine:
     def __init__(self, port=8787):
         self.base = f"http://127.0.0.1:{port}"
         snap = self._get("/api/state")          # raises if no daemon is up
-        self.cfg = {
-            "current": snap["current"],
-            "favorites": snap["favorites"],
-            "profiles": snap["profiles"],
-            "schedule": snap["schedule"],
-        }
+        self.cfg = {"current": snap["current"]}
         self._snap = snap
         self.node = snap.get("device", "")
-        # The daemon paints frames far faster than polling could follow, so the
-        # preview mirrors the resolved palette rather than every frame.
-        self.last_frame = [(0, 0, 0)] * 4
-        self._refresh_frame()
+        # What is on the keys right now, kept fresh by a background poll so the
+        # window's preview mirrors the daemon rather than guessing from the palette.
+        self.last_frame = [hex_rgb(c) for c in snap.get("frame") or ["#000000"] * 4]
+        self._poll = threading.Thread(target=self._poll_frames, daemon=True)
+        self._poll.start()
 
     # -- transport ------------------------------------------------------
 
-    def _get(self, path):
-        with urllib.request.urlopen(self.base + path, timeout=TIMEOUT) as r:
+    def _get(self, path, timeout=TIMEOUT):
+        with urllib.request.urlopen(self.base + path, timeout=timeout) as r:
             return json.load(r)
 
     def _post(self, path, body):
@@ -53,15 +54,15 @@ class RemoteEngine:
             return
         self._snap = snap
         self.cfg["current"] = snap["current"]
-        self.cfg["favorites"] = snap["favorites"]
-        self.cfg["profiles"] = snap["profiles"]
-        self.cfg["schedule"] = snap["schedule"]
-        self._refresh_frame()
 
-    def _refresh_frame(self):
-        cols = self._snap.get("resolved_colors") or ["#7aa2f7"]
-        from .kbd import hex_rgb
-        self.last_frame = [hex_rgb(cols[i % len(cols)]) for i in range(4)]
+    def _poll_frames(self):
+        while True:
+            try:
+                frame = self._get("/api/frame", timeout=1)["frame"]
+                self.last_frame = [hex_rgb(c) for c in frame]
+            except Exception:
+                pass                             # daemon busy or gone: keep the last frame
+            time.sleep(FRAME_POLL)
 
     # -- the Engine surface the GUI uses --------------------------------
 
@@ -80,35 +81,6 @@ class RemoteEngine:
             pass
         self._sync()
         return self.cfg["current"]
-
-    def save_favorite(self, name):
-        self._post("/api/favorite/save", {"name": name})
-        self._sync()
-        return name
-
-    def delete_favorite(self, name):
-        self._post("/api/favorite/delete", {"name": name})
-        self._sync()
-
-    def load_favorite(self, name):
-        self._post("/api/favorite/load", {"name": name})
-        self._sync()
-
-    def save_profile(self, which):
-        self._post("/api/profile/save", {"which": which})
-        self._sync()
-
-    def load_profile(self, which):
-        self._post("/api/profile/load", {"which": which})
-        self._sync()
-
-    def set_schedule(self, enabled, day_at, night_at):
-        self._post("/api/schedule", {"enabled": enabled, "day_at": day_at,
-                                     "night_at": night_at})
-        self._sync()
-
-    def active_profile(self):
-        return self._snap.get("active_profile")
 
     def shutdown(self):
         pass  # the daemon outlives the window; leave it running

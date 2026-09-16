@@ -3,7 +3,7 @@
 <img src="docs/banner.svg" alt="LightShow" width="100%">
 
 **Keyboard RGB control for MSI laptops and the Turtle Beach KB7 on Linux, with a real desktop app.**
-21 effects · live theme matching · day/night profiles · no vendor software, no Windows, no VM.
+21 effects · always in your Omarchy theme's colours · no vendor software, no Windows, no VM.
 
 [![Platform](https://img.shields.io/badge/platform-Linux-1a1b26?style=flat-square&logo=linux&logoColor=white)](#requirements)
 [![Python](https://img.shields.io/badge/python-3.9%2B-7aa2f7?style=flat-square&logo=python&logoColor=white)](#requirements)
@@ -226,8 +226,6 @@ lightshow status               # what hardware and theme were detected
 
 lightshow wave                 # apply a hardware effect and exit
 lightshow off
-lightshow day                  # load the day profile
-lightshow fav "Bonfire"        # load a saved favourite
 ```
 
 Hardware effects applied from the command line keep running after the process
@@ -292,9 +290,11 @@ change.
 
 ## Configuration
 
-Everything persists to `~/.config/omarchy/lightshow.json`: the current look,
-named favourites, the day and night profiles, and the auto-switch schedule.
-Written atomically, so an interrupted write never leaves a half-valid file.
+The current look persists to `~/.config/omarchy/lightshow.json`, written
+atomically so an interrupted write never leaves a half-valid file. That is the
+whole configuration: colours are never stored, because every look uses the
+theme's, and there are no favourites, profiles or schedules to keep. The window
+shows what is on the keys right now, the palette it came from, and the effects.
 
 ---
 

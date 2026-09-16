@@ -7,12 +7,11 @@
     lightshow --port 9000     port for the web UI
     lightshow <effect>        apply an effect and exit (no server)
     lightshow list            list every effect
-    lightshow fav <name>      load a saved favourite and exit
-    lightshow day | night     load a profile and exit
 
 The one-shot forms still go through the engine, so a hardware effect keeps
 running after the process exits. A software effect needs the server, because
-something has to be alive to step the animation.
+something has to be alive to step the animation. Colours always come from the
+Omarchy theme; there is nothing to choose.
 """
 
 import argparse
@@ -73,10 +72,6 @@ def main():
         return
 
     # one-shot forms
-    if args.action in ("day", "night"):
-        e = Engine(); e.load_profile(args.action); time.sleep(0.3); return
-    if args.action == "fav":
-        e = Engine(); e.load_favorite(args.arg); time.sleep(0.3); return
     if args.action in effects.HARDWARE:
         e = Engine(); e.apply({"effect": args.action}); time.sleep(0.3); return
     if args.action in effects.SOFTWARE and args.action not in ("serve", "gui"):

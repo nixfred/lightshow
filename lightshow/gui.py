@@ -1,18 +1,16 @@
 """LightShow for Omarchy - native GTK4 / libadwaita desktop app.
 
-Drives the Engine in-process. No HTTP server, no browser, no port.
+Drives the Engine in-process, or a running daemon over its API. No browser.
 
 Threading note: the Engine owns a worker thread that writes to the keyboard.
 GTK is not thread-safe, so the only cross-thread traffic is the UI *reading*
 engine.last_frame from a GLib timeout on the main loop. Nothing in here touches
 widgets from the worker.
 
-Layout rule: the page never scrolls. Every setting is on screen at once; width
-is the remedy, not height. The only scroller is the favourites list, which
-scrolls in place inside its own box.
+Layout rule: the page never scrolls. Everything is on screen at once: the
+colours on the keys right now, the theme palette they come from, and the
+effects. There is nothing else to set: colours always follow the Omarchy theme.
 """
-
-import re
 
 import gi
 
@@ -23,10 +21,10 @@ from gi.repository import Adw, Gdk, GLib, Gtk, Pango  # noqa: E402
 
 from . import effects, kbd, remote  # noqa: E402
 from .engine import Engine  # noqa: E402
-from .kbd import hex_rgb, rgb_hex  # noqa: E402
+from .kbd import rgb_hex  # noqa: E402
 
 CSS = b"""
-.zone        { border-radius: 8px; min-height: 44px; }
+.zone        { border-radius: 8px; min-height: 64px; }
 .zone-label  { font-size: 10px; font-weight: 800; letter-spacing: 2px;
                color: alpha(#000, .62); margin: 5px; }
 .title-grad  { font-size: 19px; font-weight: 800; letter-spacing: 4px; }
@@ -39,9 +37,6 @@ CSS = b"""
                box-shadow: inset 0 0 0 1px @accent_bg_color; }
 """
 
-RAIL_WIDTH = 460
-HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
-
 
 def _clear(container):
     child = container.get_first_child()
@@ -51,18 +46,11 @@ def _clear(container):
         child = nxt
 
 
-def _set_text_if_changed(widget, text):
-    # set_text on an unchanged entry still moves the cursor, which fights the
-    # user mid-edit when a sync lands while they type.
-    if widget.get_text() != text:
-        widget.set_text(text)
-
-
 class Window(Adw.ApplicationWindow):
     def __init__(self, app, engine):
         super().__init__(application=app, title="LightShow for Omarchy")
         self.engine = engine
-        self.set_default_size(1280, 820)
+        self.set_default_size(1180, 700)
         self._building = False
 
         toolbar = Adw.ToolbarView()
@@ -77,28 +65,13 @@ class Window(Adw.ApplicationWindow):
         header.pack_end(self.status)
         toolbar.add_top_bar(header)
 
-        body = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=18,
+        body = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14,
                        margin_top=12, margin_bottom=14,
                        margin_start=18, margin_end=18)
+        body.append(self._build_preview())
+        body.append(self._build_effects())
         toolbar.set_content(body)
         self.set_content(toolbar)
-
-        # Wide left pane: what you look at and pick from.
-        left = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14,
-                       hexpand=True, vexpand=True)
-        left.append(self._build_preview())
-        left.append(self._build_effects())
-        left.append(self._build_favorites())
-        body.append(left)
-
-        # Fixed rail on the right: every setting, stacked, always visible.
-        rail = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=14,
-                       hexpand=False)
-        rail.set_size_request(RAIL_WIDTH, -1)
-        rail.append(self._build_colour())
-        rail.append(self._build_controls())
-        rail.append(self._build_daynight())
-        body.append(rail)
 
         self.sync_from_engine()
         # Mirror the hardware at ~20fps. Reading last_frame is a plain list
@@ -108,15 +81,14 @@ class Window(Adw.ApplicationWindow):
     # ---------------------------------------------------------------- ui
 
     def _group(self, title):
-        g = Adw.PreferencesGroup(title=title)
-        return g
+        return Adw.PreferencesGroup(title=title)
 
     def _build_preview(self):
-        g = self._group("Live zones")
+        g = self._group("On the keys now")
         g.set_tooltip_text(
-            "Four zone groups is everything the MS-1801 exposes. Individual "
-            "keys cannot be addressed, so this is the real resolution of the "
-            "hardware.")
+            "The four zone groups both keyboards are driven in. This is what "
+            "the keys show right now; the swatches under it are the theme "
+            "palette those colours come from.")
         box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
                       margin_top=4)
         self.zone_widgets, self.zone_css = [], []
@@ -125,7 +97,7 @@ class Window(Adw.ApplicationWindow):
             f = Gtk.Box(orientation=Gtk.Orientation.VERTICAL,
                         valign=Gtk.Align.FILL, hexpand=True)
             f.add_css_class("zone")
-            f.set_size_request(60 * w, 44)
+            f.set_size_request(60 * w, 64)
             lb = Gtk.Label(label=label.upper(), halign=Gtk.Align.START,
                            valign=Gtk.Align.END, vexpand=True)
             lb.add_css_class("zone-label")
@@ -136,10 +108,15 @@ class Window(Adw.ApplicationWindow):
             self.zone_widgets.append(f)
             self.zone_css.append(prov)
             box.append(f)
-        # The labels vexpand to sit at the bottom of each zone; stop that
-        # propagating up, or the strip soaks up the favourites list's height.
         box.set_vexpand(False)
         g.add(box)
+
+        # The theme palette, as a read-out: colours are never chosen here.
+        self.theme_row = Adw.ActionRow(title="Omarchy theme colours")
+        self.pal_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=4,
+                               valign=Gtk.Align.CENTER)
+        self.theme_row.add_suffix(self.pal_box)
+        g.add(self.theme_row)
         return g
 
     def _build_effects(self):
@@ -147,7 +124,7 @@ class Window(Adw.ApplicationWindow):
         flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
                            max_children_per_line=7, min_children_per_line=3,
                            row_spacing=6, column_spacing=6, margin_top=4,
-                           homogeneous=True)
+                           homogeneous=True, vexpand=True, valign=Gtk.Align.START)
         self.fx_buttons = {}
         for e in effects.all_effects():
             btn = Gtk.Button(tooltip_text=e["desc"])
@@ -174,107 +151,6 @@ class Window(Adw.ApplicationWindow):
         g.add(flow)
         return g
 
-    def _build_colour(self):
-        g = self._group("Colour")
-
-        # Colours are never chosen here: every look uses the Omarchy theme's
-        # palette, shown below as a read-out of what is on the keys right now.
-        self.theme_row = Adw.ActionRow(title="Omarchy theme colours")
-        g.add(self.theme_row)
-
-        self.pal_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
-                                    max_children_per_line=16, row_spacing=4,
-                                    column_spacing=4, margin_top=8,
-                                    tooltip_text="The theme's palette, as used on the keys")
-        g.add(self.pal_flow)
-        return g
-
-    def _build_controls(self):
-        g = self._group("Controls")
-
-        self.speed_row = Adw.SpinRow.new_with_range(0.1, 3.0, 0.05)
-        self.speed_row.set_title("Speed")
-        self.speed_row.connect("notify::value", self._on_speed)
-        g.add(self.speed_row)
-
-        self.bright_row = Adw.SpinRow.new_with_range(0.05, 1.0, 0.05)
-        self.bright_row.set_title("Brightness")
-        self.bright_row.connect("notify::value", self._on_bright)
-        g.add(self.bright_row)
-
-        self.word_row = Adw.EntryRow(title="Scroll text")
-        self.word_row.set_tooltip_text(
-            "Scroll shows one travelling pulse per letter. With four zones the "
-            "letters cannot be drawn as shapes, so you are watching the word's "
-            "rhythm cross the keyboard.")
-        go = Gtk.Button(label="Scroll it", valign=Gtk.Align.CENTER)
-        go.add_css_class("suggested-action")
-        go.connect("clicked", self._on_scroll)
-        self.word_row.add_suffix(go)
-        g.add(self.word_row)
-        return g
-
-    def _build_favorites(self):
-        # A plain box, not a PreferencesGroup, so the list can take the rest of
-        # the pane's height and scroll inside it.
-        g = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8,
-                    vexpand=True)
-        head = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        title = Gtk.Label(label="Favourites", xalign=0)
-        title.add_css_class("heading")
-        self.fav_entry = Gtk.Entry(placeholder_text="Name this look",
-                                   hexpand=True)
-        self.fav_entry.connect("activate", self._on_fav_save)
-        save = Gtk.Button(label="Save current")
-        save.add_css_class("suggested-action")
-        save.connect("clicked", self._on_fav_save)
-        head.append(title); head.append(self.fav_entry); head.append(save)
-        g.append(head)
-
-        self.fav_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE,
-                                    valign=Gtk.Align.START)
-        self.fav_list.add_css_class("boxed-list")
-        scroller = Gtk.ScrolledWindow(vexpand=True,
-                                      hscrollbar_policy=Gtk.PolicyType.NEVER)
-        scroller.set_min_content_height(110)
-        scroller.set_child(self.fav_list)
-        g.append(scroller)
-        return g
-
-    def _build_daynight(self):
-        g = self._group("Day and Night")
-
-        auto = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8,
-                       valign=Gtk.Align.CENTER)
-        lbl = Gtk.Label(label="Auto-switch")
-        lbl.add_css_class("dim")
-        self.sched_switch = Gtk.Switch(
-            valign=Gtk.Align.CENTER,
-            tooltip_text="Applies whichever profile the clock falls into")
-        self.sched_switch.connect("notify::active", self._on_sched)
-        auto.append(lbl); auto.append(self.sched_switch)
-        g.set_header_suffix(auto)
-
-        # One row per profile: start time, load, save. Five tall rows became two.
-        for which, icon in (("day", "☀"), ("night", "☾")):
-            row = Adw.ActionRow(title=f"{icon}  {which.capitalize()}")
-            frm = Gtk.Label(label="from")
-            frm.add_css_class("dim")
-            at = Gtk.Entry(width_chars=5, max_length=5, valign=Gtk.Align.CENTER,
-                           tooltip_text=f"{which.capitalize()} starts at (HH:MM)")
-            at.add_css_class("mono")
-            at.connect("changed", self._on_time_changed)
-            load = Gtk.Button(label="Load", valign=Gtk.Align.CENTER)
-            save = Gtk.Button(label="Save current", valign=Gtk.Align.CENTER)
-            load.connect("clicked", self._on_profile_load, which)
-            save.connect("clicked", self._on_profile_save, which)
-            for w in (frm, at, load, save):
-                row.add_suffix(w)
-            g.add(row)
-            setattr(self, f"row_{which}", row)
-            setattr(self, f"{which}_at", at)
-        return g
-
     # ------------------------------------------------------------- state
 
     def sync_from_engine(self):
@@ -284,9 +160,7 @@ class Window(Adw.ApplicationWindow):
 
         mode = "daemon" if isinstance(self.engine, remote.RemoteEngine) else "local"
         self.status.set_text(
-            f"{kbd.theme_name()}   ·   {self.engine.kb.node}   ·   {mode}"
-            + (f"   ·   {self.engine.active_profile()}"
-               if self.engine.active_profile() else ""))
+            f"{kbd.theme_name()}   ·   {self.engine.kb.node}   ·   {mode}")
 
         for name, btn in self.fx_buttons.items():
             if name == cur["effect"]:
@@ -297,46 +171,17 @@ class Window(Adw.ApplicationWindow):
         self.theme_row.set_subtitle(
             f"Following {kbd.theme_name()}. Switch themes and both keyboards follow.")
 
-        _clear(self.pal_flow)
+        _clear(self.pal_box)
         for name, rgb in kbd.load_palette().items():
             hexc = rgb_hex(rgb)
-            sw = Gtk.Button(tooltip_text=f"{name}  {hexc}", can_focus=False)
-            sw.set_can_target(False)     # a read-out, not a colour pick
+            sw = Gtk.Box(tooltip_text=f"{name}  {hexc}")
             sw.set_size_request(22, 22)
             prov = Gtk.CssProvider()
             prov.load_from_data(
-                f"button{{background-color:{hexc};min-width:20px;"
-                f"min-height:20px;padding:0;border-radius:5px;}}".encode())
+                f"box{{background-color:{hexc};border-radius:5px;}}".encode())
             sw.get_style_context().add_provider(
                 prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            self.pal_flow.append(sw)
-
-        self.speed_row.set_value(float(cur.get("speed", 1.0)))
-        self.bright_row.set_value(float(cur.get("brightness", 1.0)))
-        _set_text_if_changed(self.word_row, cur.get("word") or "")
-
-        _clear(self.fav_list)
-        favs = self.engine.cfg.get("favorites", {})
-        if not favs:
-            empty = Adw.ActionRow(title="No favourites saved yet")
-            empty.set_sensitive(False)
-            self.fav_list.append(empty)
-        for name, st in favs.items():
-            r = Adw.ActionRow(title=name, subtitle=st.get("effect", ""))
-            load = Gtk.Button(label="Load", valign=Gtk.Align.CENTER)
-            dele = Gtk.Button(icon_name="user-trash-symbolic",
-                              valign=Gtk.Align.CENTER)
-            dele.add_css_class("destructive-action")
-            load.connect("clicked", self._on_fav_load, name)
-            dele.connect("clicked", self._on_fav_del, name)
-            r.add_suffix(load)
-            r.add_suffix(dele)
-            self.fav_list.append(r)
-
-        sc = self.engine.cfg.get("schedule", {})
-        self.sched_switch.set_active(bool(sc.get("enabled")))
-        _set_text_if_changed(self.day_at, sc.get("day_at", "07:00"))
-        _set_text_if_changed(self.night_at, sc.get("night_at", "20:00"))
+            self.pal_box.append(sw)
 
         self._building = False
 
@@ -356,57 +201,6 @@ class Window(Adw.ApplicationWindow):
 
     def _on_effect(self, _b, name):
         self.push({"effect": name})
-
-    def _on_speed(self, row, _p):
-        self.push({"speed": round(row.get_value(), 2)})
-
-    def _on_bright(self, row, _p):
-        self.push({"brightness": round(row.get_value(), 2)})
-
-    def _on_scroll(self, _b):
-        self.push({"effect": "scroll",
-                   "word": self.word_row.get_text() or "OMARCHY"})
-
-    def _on_fav_save(self, _w):
-        name = self.fav_entry.get_text().strip()
-        if not name:
-            self.fav_entry.grab_focus()
-            return
-        self.engine.save_favorite(name)
-        self.fav_entry.set_text("")
-        self.sync_from_engine()
-
-    def _on_fav_load(self, _b, name):
-        self.engine.load_favorite(name)
-        self.sync_from_engine()
-
-    def _on_fav_del(self, _b, name):
-        self.engine.delete_favorite(name)
-        self.sync_from_engine()
-
-    def _on_profile_save(self, _b, which):
-        self.engine.save_profile(which)
-        self.sync_from_engine()
-
-    def _on_profile_load(self, _b, which):
-        self.engine.load_profile(which)
-        self.sync_from_engine()
-
-    def _on_time_changed(self, _entry):
-        # No apply button: a time is saved the moment both read as HH:MM.
-        if self._building:
-            return
-        if HHMM.match(self.day_at.get_text()) and \
-                HHMM.match(self.night_at.get_text()):
-            self._on_sched()
-
-    def _on_sched(self, *_a):
-        if self._building:
-            return
-        self.engine.set_schedule(self.sched_switch.get_active(),
-                                 self.day_at.get_text(),
-                                 self.night_at.get_text())
-        self.sync_from_engine()
 
 
 class App(Adw.Application):
