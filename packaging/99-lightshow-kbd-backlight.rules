@@ -1,0 +1,5 @@
+# LightShow: let members of the `input` group write the kernel's keyboard
+# backlight. A sysfs file cannot take the per-seat ACL a hidraw node gets
+# (uaccess), so the rule changes the group instead. Only *kbd_backlight* LEDs
+# are touched: the white brightness-only class and the rgb: multicolor class.
+ACTION=="add|change", SUBSYSTEM=="leds", KERNEL=="*kbd_backlight*", RUN+="/bin/sh -c 'for f in brightness multi_intensity; do [ -e /sys%p/$f ] && chgrp input /sys%p/$f && chmod g+w /sys%p/$f; done; exit 0'"

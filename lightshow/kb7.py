@@ -41,6 +41,7 @@ import time
 from .kbd import (DeviceError, MODE_OFF, MODE_STATIC, MODE_BREATHING,
                   MODE_CYCLE, MODE_WAVE, Z_WASD, Z_ALPHA, Z_NAV, Z_NUMPAD,
                   ZONE_MASKS)
+from . import caps
 
 VID, PID = "10F5", "5038"
 CONTROL_INTERFACE = 2
@@ -222,6 +223,10 @@ class Keyboard:
                 "/etc/udev/rules.d/60-turtle-beach-kb7.rules") from e
         self.node = node
         self.positions, self.zones = load_positions()
+        self.name = "Turtle Beach KB7"
+        # Per-key colour, streamed frames on interface 1, static/breathe/wave in firmware.
+        self.caps = caps.Caps(colour=caps.COLOUR_PER_KEY, brightness=True, streams=True,
+                              modes=frozenset({"static", "breathe", "wave"}), zones=4)
         self._instance = _instance(node)
         self._gone = False         # a request hit ENODEV: the board was unplugged
         self._seen_new = None      # (instance, when) of a board waiting out HOTPLUG_GRACE

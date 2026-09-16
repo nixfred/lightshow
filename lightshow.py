@@ -22,7 +22,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lightshow import effects, kbd, kb7  # noqa: E402
+from lightshow import effects, kbd, kb7, leds  # noqa: E402
 from lightshow.engine import Engine  # noqa: E402
 from lightshow.server import serve  # noqa: E402
 
@@ -67,6 +67,9 @@ def main():
         kb7_node = kb7.find_control_node()
         print("kb7    : " + (f"{kb7_node}  {kb7.VID}:{kb7.PID}  Turtle Beach Command Series KB7"
                               if kb7_node else "not connected"))
+        names = [os.path.basename(p) for p in leds.find_leds()]
+        print("leds   : " + (", ".join(names) + "  (kernel keyboard backlight)" if names
+                            else "no kernel keyboard backlight"))
         print(f"theme  : {kbd.theme_name()}")
         print("palette: " + " ".join(kbd.rgb_hex(c) for c in kbd.theme_colors()))
         return

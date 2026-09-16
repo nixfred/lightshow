@@ -74,6 +74,9 @@ class RemoteEngine:
     def kb(self):
         return RemoteEngine._KB(self.node)
 
+    def snapshot(self):
+        return self._snap
+
     def apply(self, state, save=True):
         try:
             self._post("/api/apply", state)

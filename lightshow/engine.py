@@ -186,13 +186,22 @@ class Engine:
 
     def snapshot(self):
         cur = self.cfg["current"]
+        fidelity = getattr(self.kb, "fidelity", None)
+        fx = []
+        for e in effects.all_effects():
+            fid = fidelity(e["name"], e["kind"] == "software") if fidelity else {}
+            # Greyed only when no connected board can show anything for it.
+            fx.append(dict(e, fidelity=fid,
+                           greyed=bool(fid) and all(v == "none" for v in fid.values())))
+        boards = self.kb.boards_info() if hasattr(self.kb, "boards_info") else []
         return {
             "current": cur,
             "resolved_colors": [rgb_hex(c) for c in self.colors_for()],
             "frame": self.frame(),
             "theme": kbd.theme_name(),
             "theme_palette": {k: rgb_hex(v) for k, v in kbd.load_palette().items()},
-            "effects": effects.all_effects(),
+            "effects": fx,
+            "boards": boards,
             "zones": [{"name": n, "mask": m, "label": l} for n, m, l in kbd.ZONES],
             "device": self.kb.node,
         }

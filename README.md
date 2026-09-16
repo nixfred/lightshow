@@ -161,6 +161,33 @@ captures. The key-to-LED table comes from the same device support package.
 
 ---
 
+## Any keyboard that lights up
+
+Beyond the two native drivers, LightShow drives **whatever keyboard backlight
+the Linux kernel exposes**, with no vendor software:
+
+| Where the kernel puts it | What it is | What LightShow does with it |
+|---|---|---|
+| `/sys/class/leds/*::kbd_backlight` | a white backlight with a few levels (ThinkPad, Dell, ASUS, HP, Chromebook) | steady, breathe as a brightness pulse, off; animated effects show as light and dark |
+| `/sys/class/leds/rgb:kbd_backlight*` | the multicolor class: one colour group, a few, or one entry per key (TUXEDO) | theme colours per group; animated effects streamed at 5 fps for a few groups, a still look for per-key trees |
+
+Every board reports what it can do, read from the hardware, never guessed from
+a name: colour (none, one, zones, per-key), brightness levels, whether it takes
+streamed frames, and which effects its firmware runs itself. The window lists
+each connected keyboard with **one line about what it cannot do**, for example
+*"Keyboard backlight has no colour control: brightness, breathe and off only."*
+An effect no connected keyboard can show at all is greyed out; one that a board
+shows reduced says so in its tooltip. Nothing errors.
+
+Writing a sysfs backlight needs permission: `install.sh` adds a udev rule that
+opens `*kbd_backlight*` LEDs to the `input` group (sysfs files cannot take the
+per-seat ACL a hidraw node gets). Without it, brightness still works through
+UPower's D-Bus interface; colour does not. A laptop whose RGB controller is
+already driven natively and whose kernel LED is the same keys can leave the
+kernel board out with `LIGHTSHOW_NO_LEDS=1`.
+
+---
+
 ## Install
 
 ```bash

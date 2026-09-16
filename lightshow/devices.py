@@ -7,18 +7,25 @@ idea how many boards there are. A board that errors on one call is skipped
 for that call rather than taking the others down with it.
 """
 
+import os
 import sys
 import time
 
-from . import kbd, kb7
+from . import caps, kbd, kb7, leds
 
 # Every supported board: label, module (with present()), class, and how long to
 # leave a newly seen board alone before opening it (a plug-time helper writes the
 # KB7's tile labels on the same node for ~4 s; only one process may talk to it).
-BOARDS = (
+BOARDS = [
     ("MSI MysticLight", kbd, kbd.Keyboard, 0.0),
     ("Turtle Beach KB7", kb7, kb7.Keyboard, kb7.HOTPLUG_GRACE),
-)
+]
+# Any keyboard backlight the kernel exposes (/sys/class/leds/*kbd_backlight*):
+# white brightness-only ones and multicolor RGB ones alike. LIGHTSHOW_NO_LEDS=1
+# leaves it out, for a laptop whose RGB controller is already driven natively
+# and whose kernel LED is the same keys.
+if os.environ.get("LIGHTSHOW_NO_LEDS") != "1":
+    BOARDS.append(("Keyboard backlight", leds, leds.Backlight, 0.0))
 
 
 class Fanout:
@@ -31,9 +38,11 @@ class Fanout:
     def node(self):
         return "  +  ".join(b.node for b in self.boards)
 
-    def _each(self, method, *args, **kwargs):
+    def _each(self, method, *args, only=None, **kwargs):
         errors = []
         for b in self.boards:
+            if only is not None and not only(b):
+                continue
             try:
                 getattr(b, method)(*args, **kwargs)
             except OSError as e:
@@ -56,7 +65,33 @@ class Fanout:
         self._each("off", *args, **kwargs)
 
     def frame(self, colors):
-        self._each("frame", colors)
+        # Only boards that can take a new set of colours many times a second;
+        # the others keep the still look begin_software() gave them.
+        self._each("frame", colors,
+                   only=lambda b: getattr(b, "caps", None) is None or b.caps.streams)
+
+    # -- what the boards can do ---------------------------------------------
+
+    @staticmethod
+    def _caps(b):
+        return getattr(b, "caps", None) or caps.Caps(colour=caps.COLOUR_ZONES, streams=True,
+                                                     modes=frozenset(caps.HARDWARE_EFFECTS))
+
+    def boards_info(self):
+        """One entry per connected board: name, node, capabilities, and the
+        one-line notice about what it cannot do (None when it can do it all)."""
+        out = []
+        for b in self.boards:
+            c = self._caps(b)
+            name = getattr(b, "name", b.node)
+            out.append({"name": name, "node": b.node, "caps": c.as_dict(),
+                        "notice": c.notice(name)})
+        return out
+
+    def fidelity(self, effect, software):
+        """{board name: full|reduced|none} for one effect."""
+        return {getattr(b, "name", b.node): self._caps(b).fidelity(effect, software)
+                for b in self.boards}
 
     def begin_software(self, name, colors):
         """A software effect is starting. Boards that cannot animate per frame

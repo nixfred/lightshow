@@ -117,6 +117,12 @@ class Window(Adw.ApplicationWindow):
                                valign=Gtk.Align.CENTER)
         self.theme_row.add_suffix(self.pal_box)
         g.add(self.theme_row)
+
+        # One row per connected keyboard: what it is, and in one line what it
+        # cannot do, so nobody wonders why a white backlight is not showing red.
+        self.boards_box = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.boards_box.add_css_class("boxed-list")
+        g.add(self.boards_box)
         return g
 
     def _build_effects(self):
@@ -157,16 +163,34 @@ class Window(Adw.ApplicationWindow):
         """Repaint every widget from engine config. Guarded against feedback."""
         self._building = True
         cur = self.engine.cfg["current"]
+        snap = self.engine.snapshot()
 
         mode = "daemon" if isinstance(self.engine, remote.RemoteEngine) else "local"
         self.status.set_text(
             f"{kbd.theme_name()}   ·   {self.engine.kb.node}   ·   {mode}")
 
+        fidelity = {e["name"]: e for e in snap.get("effects", [])}
         for name, btn in self.fx_buttons.items():
             if name == cur["effect"]:
                 btn.add_css_class("card-sel")
             else:
                 btn.remove_css_class("card-sel")
+            e = fidelity.get(name, {})
+            btn.set_sensitive(not e.get("greyed"))
+            tip = e.get("desc", btn.get_tooltip_text() or "")
+            limits = [f"{b}: {'not shown' if f == 'none' else 'reduced'}"
+                      for b, f in (e.get("fidelity") or {}).items() if f != "full"]
+            if limits:
+                tip += "\n" + "\n".join(limits)
+            btn.set_tooltip_text(tip)
+
+        _clear(self.boards_box)
+        for b in snap.get("boards", []):
+            row = Adw.ActionRow(title=b["name"],
+                                subtitle=("⚠ " + b["notice"]) if b.get("notice")
+                                else b["caps"]["summary"])
+            row.set_tooltip_text(f"{b['node']}  ·  {b['caps']['summary']}")
+            self.boards_box.append(row)
 
         self.theme_row.set_subtitle(
             f"Following {kbd.theme_name()}. Switch themes and both keyboards follow.")

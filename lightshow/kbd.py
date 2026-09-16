@@ -156,6 +156,11 @@ class Keyboard:
             ) from e
         self.node = node
         self._zone = None
+        from . import caps
+        self.name = "MSI keyboard"
+        # Four zone groups, streamed frames, and four effects the controller runs itself.
+        self.caps = caps.Caps(colour=caps.COLOUR_ZONES, brightness=True, streams=True,
+                              modes=frozenset({"static", "breathe", "cycle", "wave"}), zones=4)
 
     # -- raw ------------------------------------------------------------
 

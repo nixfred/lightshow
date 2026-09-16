@@ -63,6 +63,11 @@
   .swatches{display:flex;flex-wrap:wrap;gap:5px}
   .note{color:var(--dim);font-size:11px;line-height:1.5;margin-top:10px;
         border-left:2px solid var(--line);padding-left:10px}
+  /* one line per connected keyboard; a warning when it cannot do everything */
+  .boards{margin-top:10px;display:flex;flex-direction:column;gap:3px;font-size:11px}
+  .boards b{color:var(--fg);font-weight:600}
+  .boards .warn{color:#e0af68}
+  .fx:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
 </style>
 </head>
 <body>
@@ -89,6 +94,7 @@
       <div class="swatches" id="palette"></div>
     </div>
     <div class="note" id="themeNote"></div>
+    <div class="boards" id="boards"></div>
   </section>
 
   <section class="cham">
@@ -136,8 +142,24 @@ function render(){
     b.className = 'fx cham' + (e.name === local.effect ? ' on' : '');
     b.innerHTML = `<div class="n">${e.name}</div><div class="d">${e.desc}</div>
                    <div class="k">${e.kind}</div>`;
+    // Greyed only when no connected keyboard can show anything for it; the
+    // tooltip names any board that shows it reduced.
+    b.disabled = !!e.greyed;
+    const limits = Object.entries(e.fidelity || {}).filter(([, f]) => f !== 'full')
+      .map(([name, f]) => name + ': ' + (f === 'none' ? 'not shown' : 'reduced'));
+    b.title = e.desc + (limits.length ? '\n' + limits.join('\n') : '');
     b.onclick = () => push({effect: e.name});
     fx.appendChild(b);
+  });
+
+  const bl = $('boards'); bl.innerHTML = '';
+  (S.boards || []).forEach(b => {
+    const d = document.createElement('div');
+    d.innerHTML = '<b></b> ' + (b.notice ? '<span class="warn"></span>' : '<span></span>');
+    d.querySelector('b').textContent = b.name;
+    d.querySelector('span').textContent = b.notice ? '⚠ ' + b.notice : b.caps.summary;
+    d.title = b.node;
+    bl.appendChild(d);
   });
 
   const pal = $('palette'); pal.innerHTML = '';
