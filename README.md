@@ -17,12 +17,14 @@
 
 ## Does this work on my machine?
 
-**Read this part first.** This drives one specific family of hardware.
+**Read this part first.**
 
-LightShow talks to **MSI "MysticLight" keyboard LED controllers** and the
-**Turtle Beach Command Series KB7** over raw USB HID. It is *not* a general RGB
-tool. It will not drive Razer, Corsair, Logitech, ASUS, Framework, or desktop
-motherboard lighting.
+LightShow has native drivers for **MSI "MysticLight" keyboard LED controllers**
+and the **Turtle Beach Command Series KB7** (raw USB HID, verified packet by
+packet), and beyond those it drives **any keyboard backlight the Linux kernel
+exposes** (white or RGB, see [Any keyboard that lights up](#any-keyboard-that-lights-up))
+and **QMK keyboards with VIA**. Every board reports what it can do and the
+window says, per keyboard, what it cannot.
 
 Check in one command:
 
