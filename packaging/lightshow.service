@@ -5,6 +5,9 @@ Documentation=https://github.com/nixfred/lightshow
 # has to stay alive to step them. This also keeps the keyboard following the
 # desktop theme without the window being open.
 After=graphical-session.target
+# If the device is unplugged or the machine wakes oddly, back off rather than spin.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -13,8 +16,6 @@ Restart=on-failure
 RestartSec=3
 # The device is a USB LED controller; if it is unplugged or the machine wakes
 # oddly, back off rather than spinning.
-StartLimitIntervalSec=60
-StartLimitBurst=5
 
 [Install]
 WantedBy=default.target

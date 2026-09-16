@@ -103,6 +103,14 @@ def scan_devices():
     return found
 
 
+def present():
+    """Is a supported MSI controller on the bus right now?"""
+    try:
+        return find_device() is not None
+    except DeviceError:
+        return False
+
+
 def find_device():
     """Pick a controller to drive.
 

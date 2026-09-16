@@ -146,6 +146,11 @@ def _instance(node):
         return None
 
 
+def present():
+    """Is a KB7 control interface on the bus right now?"""
+    return find_control_node() is not None
+
+
 def find_stream_node():
     """hidraw node for the KB7's effect-stream interface (USB interface 1), or None."""
     want = f"HID_ID=0003:0000{VID}:0000{PID}"
