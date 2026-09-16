@@ -124,9 +124,10 @@ KB7 key groups:
 
 What it does, and what it deliberately does not:
 
-- **Static and breathe** run on the keyboard's own microcontroller. LightShow
-  writes one record when you apply the look and nothing after that. Wave shows as
-  static until its mode byte is captured.
+- **Static, breathe and wave** run on the keyboard's own microcontroller. LightShow
+  writes one record when you apply the look and nothing after that. Wave is the
+  mode the board ships running, in your theme colours. Cycle has no firmware
+  equivalent on the KB7 and shows as the wave.
 - **Software effects animate live** (firmware 1.37). LightShow switches the KB7 into
   direct mode, waits until it reports ready, and streams frames on USB interface 1
   at up to 20 fps. Frames never touch the persistent record, so there is no flash

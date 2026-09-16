@@ -56,8 +56,13 @@ PROFILE_REPORT = 0x06
 # factory record but never written by Swarm; a LightShow wave write on
 # 2026-09-14 was the last write before the board went dark, so wave falls back
 # to static until it is captured.
-KB7_MODE = {MODE_STATIC: 0x01, MODE_BREATHING: 0x07}
+# Firmware modes. 0x0a is the mode the board ships running (factory profile-0
+# record: mode 0a, speed 6, byte 7 = 09), listed by kb7ctl as "factory wave".
+# Cycle has no firmware equivalent on the KB7; wave is its nearest animation.
+KB7_MODE = {MODE_STATIC: 0x01, MODE_BREATHING: 0x07, MODE_WAVE: 0x0A, MODE_CYCLE: 0x0A}
 B7_CUSTOM = 0x0B
+B7_WAVE = 0x09               # byte 7 of the factory wave record
+WAVE_SPEED = 6               # byte 5 of the factory wave record; direction unverified
 
 # Software-effect frames are throttled to one record write per this many
 # seconds. Applying a look (static, breathe, wave, off) is never throttled.
@@ -558,6 +563,9 @@ class Keyboard:
             rec[6] = max(0, min(100, int(brightness)))
         if mode_byte == KB7_MODE[MODE_STATIC]:
             rec[7] = B7_CUSTOM
+        elif mode_byte == KB7_MODE[MODE_WAVE]:
+            rec[7] = B7_WAVE
+            rec[5] = WAVE_SPEED
         for mask, rgb in zone_colours.items():
             r, g, b = (max(0, min(255, int(c))) for c in rgb)
             for key in self.zones.get(mask, ()):
@@ -605,7 +613,7 @@ class Keyboard:
         # the firmware breathes the whole record, so give each zone its own peak
         # colour (dim troughs are 5% of a colour, far under a fifth of the peak).
         palette = []
-        if mode == MODE_BREATHING and keyframes:
+        if mode in (MODE_BREATHING, MODE_WAVE, MODE_CYCLE) and keyframes:
             for f in keyframes:
                 c = tuple(int(v) for v in f[1:4])
                 if sum(c) * 5 >= peak and c not in palette:
