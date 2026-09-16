@@ -177,31 +177,15 @@ class Window(Adw.ApplicationWindow):
     def _build_colour(self):
         g = self._group("Colour")
 
-        self.theme_row = Adw.SwitchRow(
-            title="Match Omarchy theme",
-            subtitle="Colours follow whatever theme you switch to")
-        self.theme_row.connect("notify::active", self._on_theme_toggle)
+        # Colours are never chosen here: every look uses the Omarchy theme's
+        # palette, shown below as a read-out of what is on the keys right now.
+        self.theme_row = Adw.ActionRow(title="Omarchy theme colours")
         g.add(self.theme_row)
-
-        self.colour_row = Adw.ActionRow(title="Custom colours")
-        self.colour_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL,
-                                  spacing=6, valign=Gtk.Align.CENTER)
-        add = Gtk.Button(icon_name="list-add-symbolic", valign=Gtk.Align.CENTER,
-                         tooltip_text="Add a colour")
-        rem = Gtk.Button(icon_name="list-remove-symbolic", valign=Gtk.Align.CENTER,
-                         tooltip_text="Remove the last colour")
-        add.connect("clicked", self._on_add_colour)
-        rem.connect("clicked", self._on_del_colour)
-        self.colour_row.add_suffix(self.colour_box)
-        self.colour_row.add_suffix(add)
-        self.colour_row.add_suffix(rem)
-        g.add(self.colour_row)
 
         self.pal_flow = Gtk.FlowBox(selection_mode=Gtk.SelectionMode.NONE,
                                     max_children_per_line=16, row_spacing=4,
                                     column_spacing=4, margin_top=8,
-                                    tooltip_text="Theme palette: click a swatch "
-                                                 "to use it as your only colour")
+                                    tooltip_text="The theme's palette, as used on the keys")
         g.add(self.pal_flow)
         return g
 
@@ -310,22 +294,14 @@ class Window(Adw.ApplicationWindow):
             else:
                 btn.remove_css_class("card-sel")
 
-        self.theme_row.set_active(bool(cur.get("use_theme", True)))
-        self.colour_row.set_sensitive(not cur.get("use_theme", True))
-
-        _clear(self.colour_box)
-        for i, hexc in enumerate(cur.get("colors") or ["#7aa2f7"]):
-            btn = Gtk.ColorDialogButton(dialog=Gtk.ColorDialog())
-            rgba = Gdk.RGBA()
-            rgba.parse(hexc)
-            btn.set_rgba(rgba)
-            btn.connect("notify::rgba", self._on_colour_changed, i)
-            self.colour_box.append(btn)
+        self.theme_row.set_subtitle(
+            f"Following {kbd.theme_name()}. Switch themes and both keyboards follow.")
 
         _clear(self.pal_flow)
         for name, rgb in kbd.load_palette().items():
             hexc = rgb_hex(rgb)
-            sw = Gtk.Button(tooltip_text=f"{name}  {hexc}")
+            sw = Gtk.Button(tooltip_text=f"{name}  {hexc}", can_focus=False)
+            sw.set_can_target(False)     # a read-out, not a colour pick
             sw.set_size_request(22, 22)
             prov = Gtk.CssProvider()
             prov.load_from_data(
@@ -333,7 +309,6 @@ class Window(Adw.ApplicationWindow):
                 f"min-height:20px;padding:0;border-radius:5px;}}".encode())
             sw.get_style_context().add_provider(
                 prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-            sw.connect("clicked", self._on_palette_pick, hexc)
             self.pal_flow.append(sw)
 
         self.speed_row.set_value(float(cur.get("speed", 1.0)))
@@ -381,35 +356,6 @@ class Window(Adw.ApplicationWindow):
 
     def _on_effect(self, _b, name):
         self.push({"effect": name})
-
-    def _on_theme_toggle(self, row, _p):
-        self.push({"use_theme": row.get_active()})
-
-    def _on_colour_changed(self, btn, _p, idx):
-        if self._building:
-            return
-        c = btn.get_rgba()
-        hexc = "#%02x%02x%02x" % (int(c.red * 255), int(c.green * 255),
-                                  int(c.blue * 255))
-        cols = list(self.engine.cfg["current"].get("colors") or ["#7aa2f7"])
-        while len(cols) <= idx:
-            cols.append(hexc)
-        cols[idx] = hexc
-        self.push({"colors": cols, "use_theme": False})
-
-    def _on_add_colour(self, _b):
-        cols = list(self.engine.cfg["current"].get("colors") or [])
-        cols.append("#ff7ac6")
-        self.push({"colors": cols, "use_theme": False})
-
-    def _on_del_colour(self, _b):
-        cols = list(self.engine.cfg["current"].get("colors") or [])
-        if len(cols) > 1:
-            cols.pop()
-            self.push({"colors": cols, "use_theme": False})
-
-    def _on_palette_pick(self, _b, hexc):
-        self.push({"colors": [hexc], "use_theme": False})
 
     def _on_speed(self, row, _p):
         self.push({"speed": round(row.get_value(), 2)})

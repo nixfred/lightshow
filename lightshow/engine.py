@@ -103,7 +103,14 @@ class Engine:
     def apply(self, state, save=True):
         """Switch to a new look. Stops whatever was running first."""
         merged = dict(self.cfg["current"])
-        merged.update({k: v for k, v in state.items() if k in DEFAULT_STATE})
+        # Colours always come from the Omarchy theme (Fred, 2026-09-15: "no
+        # matter what I select or pick, always the theme colours"; then "remove
+        # the custom colours, not needed"). Whatever a caller sends for colours
+        # or use_theme is ignored, so no front end, favourite, profile or API
+        # call can ever switch the theme off.
+        merged.update({k: v for k, v in state.items()
+                       if k in DEFAULT_STATE and k not in ("use_theme", "colors")})
+        merged["use_theme"] = True
         name = merged["effect"]
         colors = self.colors_for(merged)
         speed = float(merged.get("speed", 1.0))

@@ -149,18 +149,8 @@
     <section class="cham">
       <h2>Colour</h2>
       <div class="row">
-        <label class="toggle">
-          <input type="checkbox" id="useTheme"> Match Omarchy theme
-        </label>
-      </div>
-      <div class="row" id="customRow">
-        <label>Custom</label>
-        <span id="pickers"></span>
-        <button id="addCol">+ colour</button>
-        <button id="delCol">− colour</button>
-      </div>
-      <div class="row">
-        <label>Theme palette</label>
+        <label>Theme</label>
+        <span id="themeState"></span>
       </div>
       <div class="swatches" id="palette"></div>
       <div class="note" id="themeNote"></div>
@@ -249,27 +239,15 @@ function render(){
   });
 
   // colour
-  $('useTheme').checked = !!local.use_theme;
-  $('customRow').style.opacity = local.use_theme ? .4 : 1;
-  const pk = $('pickers'); pk.innerHTML = '';
-  (local.colors || []).forEach((c, i) => {
-    const inp = document.createElement('input');
-    inp.type = 'color'; inp.value = c;
-    inp.oninput = () => { const cols = local.colors.slice(); cols[i] = inp.value;
-                          push({colors: cols, use_theme: false}); };
-    pk.appendChild(inp);
-  });
+  $('themeState').textContent = S.theme;
 
   const pal = $('palette'); pal.innerHTML = '';
   Object.entries(S.theme_palette || {}).forEach(([name, hex]) => {
     const d = document.createElement('div');
     d.className = 'sw cham'; d.style.background = hex; d.title = name + ' ' + hex;
-    d.onclick = () => push({colors:[hex], use_theme:false});
     pal.appendChild(d);
   });
-  $('themeNote').textContent = local.use_theme
-    ? 'Following ' + S.theme + '. Switch your Omarchy theme and these colours follow.'
-    : 'Using your custom colours. Click a palette swatch or tick Match theme to go back.';
+  $('themeNote').textContent = 'Every look uses ' + S.theme + "'s colours. Switch your Omarchy theme and both keyboards follow.";
 
   // sliders
   $('speed').value = local.speed;   $('speedV').textContent  = (+local.speed).toFixed(2) + '×';
@@ -321,11 +299,6 @@ function renderPreviewGuess(){
 
 // ---- wiring ----------------------------------------------------------
 
-$('useTheme').onchange = e => push({use_theme: e.target.checked});
-$('addCol').onclick = () => { const c=(local.colors||[]).slice(); c.push('#ff7ac6');
-                              push({colors:c, use_theme:false}); };
-$('delCol').onclick = () => { const c=(local.colors||[]).slice();
-                              if(c.length>1){ c.pop(); push({colors:c, use_theme:false}); } };
 $('speed').oninput  = e => { $('speedV').textContent=(+e.target.value).toFixed(2)+'×'; };
 $('speed').onchange = e => push({speed: parseFloat(e.target.value)});
 $('bright').oninput  = e => { $('brightV').textContent=Math.round(e.target.value*100)+'%'; };

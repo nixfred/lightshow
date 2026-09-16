@@ -263,8 +263,9 @@ works no matter how the theme changed, including a hand-edited file.
 Dark background colours are filtered out deliberately: on a keyboard they read
 as "off" and make an animation look broken rather than subtle.
 
-Not on Omarchy? Turn off **Match theme** and pick your own colours. Everything
-else works the same.
+There are no custom colours. Every effect, favourite and profile uses the
+current theme's palette, so the keyboards always match the desktop. Not on
+Omarchy? LightShow falls back to a built-in palette.
 
 ---
 
