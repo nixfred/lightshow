@@ -22,7 +22,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lightshow import effects, kbd, kb7, leds, via  # noqa: E402
+from lightshow import effects, kbd, kb7, leds, openrgb, via  # noqa: E402
 from lightshow.engine import Engine  # noqa: E402
 from lightshow.server import serve  # noqa: E402
 
@@ -78,6 +78,19 @@ def main():
             print(f"via    : {node}  {ident}  {name}" + ("" if ok else "  [not writable]"))
             if not ok:
                 print(f"         add to /etc/udev/rules.d/99-lightshow-via.rules: {via.udev_hint(ident)}")
+        import shutil
+        if not shutil.which("openrgb"):
+            print("openrgb: not installed (pacman -S openrgb adds every keyboard OpenRGB knows)")
+        elif openrgb._port_open():
+            try:
+                c = openrgb.Client()
+                print(f"openrgb: server on {openrgb.HOST}:{openrgb.PORT}, protocol {c.version}, "
+                      f"{c.count()} device(s)")
+                c.close()
+            except OSError as e:
+                print(f"openrgb: server on {openrgb.HOST}:{openrgb.PORT} but no answer: {e}")
+        else:
+            print("openrgb: installed; the daemon starts its server and asks it once")
         print(f"theme  : {kbd.theme_name()}")
         print("palette: " + " ".join(kbd.rgb_hex(c) for c in kbd.theme_colors()))
         return

@@ -183,6 +183,20 @@ each connected keyboard with **one line about what it cannot do**, for example
 An effect no connected keyboard can show at all is greyed out; one that a board
 shows reduced says so in its tooltip. Nothing errors.
 
+**Everything OpenRGB knows** (Razer, Corsair, Logitech, SteelSeries, ASUS,
+HyperX, Roccat, and hundreds more): install the `openrgb` package and LightShow
+uses it. The daemon starts OpenRGB's SDK server headless if none is running,
+asks it for every device, keeps the keyboards, and drives each by what it
+reports: a mode with per-LED colour ("Direct", which writes no flash) gets
+streamed effects with LightShow's four zones spread over the keys; a board
+with fixed firmware modes only gets the closest one (Static, Breathing,
+Spectrum Cycle, Wave) with the theme's colours where the mode takes any; a
+colourless board gets brightness. Nothing is ever saved to a device. A keyboard
+a native driver already owns is skipped, so nothing is driven twice. If OpenRGB
+has no keyboard to offer, its server is shut down again and not asked until
+the next start. `LIGHTSHOW_OPENRGB=0` leaves the bridge out;
+`LIGHTSHOW_OPENRGB_HOST`/`_PORT` point it at a server elsewhere.
+
 **QMK keyboards with VIA** (Keychron and most custom boards) are found by the
 raw-HID usage their firmware advertises (page `0xFF60`, usage `0x61`), no
 vendor list needed, and driven through VIA's lighting channel: one colour for

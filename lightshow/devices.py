@@ -11,7 +11,7 @@ import os
 import sys
 import time
 
-from . import caps, kbd, kb7, leds, via
+from . import caps, kbd, kb7, leds, openrgb, via
 
 # Every supported board: label, module (with present()), class, and how long to
 # leave a newly seen board alone before opening it (a plug-time helper writes the
@@ -29,6 +29,11 @@ if os.environ.get("LIGHTSHOW_NO_LEDS") != "1":
 # QMK keyboards with VIA (Keychron, most custom boards): found by their raw-HID
 # usage, driven one colour at a time. One such board for now.
 BOARDS.append(("QMK/VIA keyboard", via, via.Keyboard, 2.0))
+# Every keyboard OpenRGB knows, if the openrgb package is installed: its server
+# is started headless when none runs, asked once, and shut down again if it has
+# no keyboard to offer. LIGHTSHOW_OPENRGB=0 leaves it out.
+if os.environ.get("LIGHTSHOW_OPENRGB") != "0":
+    BOARDS.append(("OpenRGB", openrgb, openrgb.Bridge, 15.0))
 
 
 class Fanout:
@@ -85,6 +90,10 @@ class Fanout:
         one-line notice about what it cannot do (None when it can do it all)."""
         out = []
         for b in self.boards:
+            sub = getattr(b, "boards_info", None)
+            if sub:
+                out.extend(sub())
+                continue
             c = self._caps(b)
             name = getattr(b, "name", b.node)
             out.append({"name": name, "node": b.node, "caps": c.as_dict(),
@@ -93,8 +102,14 @@ class Fanout:
 
     def fidelity(self, effect, software):
         """{board name: full|reduced|none} for one effect."""
-        return {getattr(b, "name", b.node): self._caps(b).fidelity(effect, software)
-                for b in self.boards}
+        out = {}
+        for b in self.boards:
+            sub = getattr(b, "fidelity", None)
+            if sub:
+                out.update(sub(effect, software))
+            else:
+                out[getattr(b, "name", b.node)] = self._caps(b).fidelity(effect, software)
+        return out
 
     def begin_software(self, name, colors):
         """A software effect is starting. Boards that cannot animate per frame
@@ -164,6 +179,11 @@ def open_all():
     """
     boards, reasons, missing = [], [], []
     for label, mod, cls, grace in BOARDS:
+        if mod is openrgb:
+            # Never drive a keyboard twice: the bridge skips any device whose
+            # location names a node a native driver already holds.
+            openrgb.EXCLUDE_NODES = {b.node for b in boards} | {
+                n for n in (kb7.find_control_node(), kb7.find_stream_node()) if n}
         try:
             boards.append(cls())
         except kbd.DeviceError as e:
