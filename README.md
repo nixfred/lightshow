@@ -61,10 +61,12 @@ LIGHTSHOW_DEVICE=/dev/hidraw3 lightshow
 
 <img src="docs/effects.svg" alt="The effects" width="100%">
 
-The default is **smatter**: all four zones wearing a different colour from the
-active theme at once, each walking the palette at a deliberately non-harmonic
-rate so the combination never settles into a repeating pattern. The highlight
-group stays at full brightness while the rest sit back.
+The default is **breathe**: each zone breathes through the theme's colours, in
+on one, out to near dark, in on the next. It runs on the keyboards' own
+microcontrollers, so it costs nothing and survives the app closing. **Smatter**
+is the busiest of the software effects: all four zones wearing a different
+theme colour at once, each walking the palette at a deliberately non-harmonic
+rate so the combination never settles into a repeating pattern.
 
 Two families, and the difference is worth understanding:
 
@@ -178,6 +180,16 @@ each connected keyboard with **one line about what it cannot do**, for example
 *"Keyboard backlight has no colour control: brightness, breathe and off only."*
 An effect no connected keyboard can show at all is greyed out; one that a board
 shows reduced says so in its tooltip. Nothing errors.
+
+**QMK keyboards with VIA** (Keychron and most custom boards) are found by the
+raw-HID usage their firmware advertises (page `0xFF60`, usage `0x61`), no
+vendor list needed, and driven through VIA's lighting channel: one colour for
+the board in the theme's accent, brightness, off, breathe as a brightness pulse,
+and animated effects as that one colour changing ten times a second. Nothing is
+ever saved to the keyboard's EEPROM, so its own saved look returns when
+LightShow stops. Firmware older than VIA protocol 12 (VIA v3, QMK 0.18) is
+reported and left alone. The hidraw node must be writable: `lightshow status`
+prints the one udev line to add for a keyboard it can see but not open.
 
 Writing a sysfs backlight needs permission: `install.sh` adds a udev rule that
 opens `*kbd_backlight*` LEDs to the `input` group (sysfs files cannot take the

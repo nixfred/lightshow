@@ -22,7 +22,7 @@ import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from lightshow import effects, kbd, kb7, leds  # noqa: E402
+from lightshow import effects, kbd, kb7, leds, via  # noqa: E402
 from lightshow.engine import Engine  # noqa: E402
 from lightshow.server import serve  # noqa: E402
 
@@ -70,6 +70,14 @@ def main():
         names = [os.path.basename(p) for p in leds.find_leds()]
         print("leds   : " + (", ".join(names) + "  (kernel keyboard backlight)" if names
                             else "no kernel keyboard backlight"))
+        vias = via.find_nodes()
+        if not vias:
+            print("via    : no QMK/VIA keyboard")
+        for node, name, ident in vias:
+            ok = os.access(node, os.R_OK | os.W_OK)
+            print(f"via    : {node}  {ident}  {name}" + ("" if ok else "  [not writable]"))
+            if not ok:
+                print(f"         add to /etc/udev/rules.d/99-lightshow-via.rules: {via.udev_hint(ident)}")
         print(f"theme  : {kbd.theme_name()}")
         print("palette: " + " ".join(kbd.rgb_hex(c) for c in kbd.theme_colors()))
         return

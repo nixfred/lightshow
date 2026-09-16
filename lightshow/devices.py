@@ -11,7 +11,7 @@ import os
 import sys
 import time
 
-from . import caps, kbd, kb7, leds
+from . import caps, kbd, kb7, leds, via
 
 # Every supported board: label, module (with present()), class, and how long to
 # leave a newly seen board alone before opening it (a plug-time helper writes the
@@ -26,6 +26,9 @@ BOARDS = [
 # and whose kernel LED is the same keys.
 if os.environ.get("LIGHTSHOW_NO_LEDS") != "1":
     BOARDS.append(("Keyboard backlight", leds, leds.Backlight, 0.0))
+# QMK keyboards with VIA (Keychron, most custom boards): found by their raw-HID
+# usage, driven one colour at a time. One such board for now.
+BOARDS.append(("QMK/VIA keyboard", via, via.Keyboard, 2.0))
 
 
 class Fanout:
