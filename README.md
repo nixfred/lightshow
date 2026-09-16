@@ -52,10 +52,13 @@ name, point straight at it:
 LIGHTSHOW_DEVICE=/dev/hidraw3 lightshow
 ```
 
-> **Why not OpenRGB?** OpenRGB has no entry for these product IDs and detects
-> zero devices on the hardware this was built for. The protocol here is ported
-> from OpenRGB's `MSIKeyboard1565Controller` and verified packet by packet
-> against real hardware. See [docs/PROTOCOL.md](docs/PROTOCOL.md).
+> **Why native drivers for these two?** OpenRGB has no entry for their product
+> IDs and detects zero devices on the hardware this was built for. The MSI
+> protocol here is ported from OpenRGB's `MSIKeyboard1565Controller` and both
+> drivers are verified packet by packet against real hardware. For every
+> keyboard OpenRGB *does* know, LightShow uses OpenRGB, see
+> [Any keyboard that lights up](#any-keyboard-that-lights-up). Details in
+> [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
 ---
 

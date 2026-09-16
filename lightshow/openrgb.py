@@ -413,6 +413,10 @@ def _stop_server():
     global _server_proc
     if _server_proc is not None and _server_proc.poll() is None:
         _server_proc.terminate()
+        try:
+            _server_proc.wait(timeout=5)     # reap it, or it lingers as a zombie
+        except subprocess.TimeoutExpired:
+            _server_proc.kill()
     _server_proc = None
 
 

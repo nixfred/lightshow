@@ -155,6 +155,12 @@ class Fanout:
             try:
                 board = cls()
             except kbd.DeviceError as e:
+                if not mod.present():
+                    # It answered and had nothing for us (OpenRGB with no keyboard):
+                    # say so once and stop looking until the next start.
+                    print(f"lightshow: {label}: {e}", file=sys.stderr, flush=True)
+                    del self.missing[label]
+                    continue
                 if now - last_msg > 60:
                     print(f"lightshow: {label} is on the bus but cannot be opened: {e}; retrying",
                           file=sys.stderr, flush=True)
