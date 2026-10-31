@@ -65,6 +65,47 @@ def apply_hardware(kb, name, colors, speed=1.0, brightness=1.0):
 
 HARDWARE = ["off", "static", "breathe", "cycle", "wave"]
 
+# -- picked colours ------------------------------------------------------
+# How many colours each effect actually uses, and what they are for, so the
+# colour picker offers the right number of slots. 0 = the effect has no colours.
+COLOR_SLOTS = {
+    "off": (0, "No colours"),
+    "static": (1, "One solid colour"),
+    "breathe": (4, "Breathes through up to 4 colours"),
+    "cycle": (8, "Cycles through up to 8 colours"),
+    "wave": (6, "Waves through up to 6 colours"),
+    "smatter": (8, "Each zone picks from these"),
+    "fireworks": (8, "Bursts pick from these"),
+    "waterfall": (8, "Cascades through these"),
+    "aurora": (8, "Drifts between these"),
+    "ember": (2, "Flame, then coals"),
+    "matrix": (1, "Rain colour"),
+    "police": (2, "Left side, right side"),
+    "tide": (1, "Water colour"),
+    "rainbow": (0, "Full spectrum, no colours to pick"),
+    "heartbeat": (1, "Pulse colour"),
+    "vapor": (3, "Up to 3 colours sliding over each other"),
+    "scanner": (1, "Eye colour"),
+    "lightning": (1, "Afterglow colour"),
+    "scroll": (8, "Letters take these in turn"),
+    "gamer": (1, "Gaming keys colour"),
+    "codedark": (8, "Your keys drift through these"),
+}
+
+# Effects whose look is normally fixed; with custom colours they take a
+# `custom=True` flag and use the picks. Their defaults are the fixed colours.
+FIXED = {"ember", "matrix", "police", "vapor"}
+FIXED_DEFAULTS = {
+    "ember": ["#ff9614", "#3c0600"],
+    "matrix": ["#00ff46"],
+    "police": ["#ff0000", "#0028ff"],
+    "vapor": ["#ff3cb4", "#963cff", "#3cf0ff"],
+}
+
+
+def color_slots(name):
+    return COLOR_SLOTS.get(name, (8, "Uses these colours"))
+
 
 # ---------------------------------------------------------------- software
 
@@ -130,10 +171,13 @@ def fx_aurora(colors, speed=1.0):
         yield frame, 0.05
 
 
-def fx_ember(colors, speed=1.0):
+def fx_ember(colors, speed=1.0, custom=False):
     """Banked coals. Deep reds breathing, with the odd bright flare."""
     heat = [random.random() for _ in range(N)]
     COOL, HOT = (60, 6, 0), (255, 150, 20)
+    if custom:  # picked colours: [flame, coals]
+        HOT = colors[0]
+        COOL = colors[1] if len(colors) > 1 else scale(colors[0], 0.22)
     while True:
         frame = []
         for i in range(N):
@@ -145,10 +189,13 @@ def fx_ember(colors, speed=1.0):
         yield frame, 0.075
 
 
-def fx_matrix(colors, speed=1.0):
+def fx_matrix(colors, speed=1.0, custom=False):
     """Green rain. Bright head, decaying trail, random re-seeding."""
     trail = [0.0] * N
     HEAD, TAIL = (200, 255, 200), (0, 255, 70)
+    if custom:  # picked colour is the rain; the head is a whiter version of it
+        TAIL = colors[0]
+        HEAD = mix(colors[0], (255, 255, 255), 0.7)
     drop = 0.0
     while True:
         drop += 0.22 * speed
@@ -163,9 +210,12 @@ def fx_matrix(colors, speed=1.0):
         yield frame, 0.05
 
 
-def fx_police(colors, speed=1.0):
+def fx_police(colors, speed=1.0, custom=False):
     """Red and blue strobe, split across the board. Obnoxious on purpose."""
     RED, BLUE = (255, 0, 0), (0, 40, 255)
+    if custom:  # picked colours: [left side, right side]
+        RED = colors[0]
+        BLUE = colors[1] if len(colors) > 1 else colors[0]
     t = 0
     while True:
         t += 1
@@ -215,10 +265,13 @@ def fx_heartbeat(colors, speed=1.0):
         yield [scale(c, a)] * N, 0.045 / max(0.1, speed)
 
 
-def fx_vapor(colors, speed=1.0):
+def fx_vapor(colors, speed=1.0, custom=False):
     """Vaporwave: hot pink and cyan sliding over each other."""
     PINK, CYAN, PURPLE = (255, 60, 180), (60, 240, 255), (150, 60, 255)
     pal = [PINK, PURPLE, CYAN, PURPLE]
+    if custom:  # picked colours slide over each other, bouncing back through the middle
+        pts = list(colors[:3])
+        pal = pts + pts[-2:0:-1] if len(pts) > 2 else (pts * 2 if len(pts) > 1 else pts * 4)
     t = 0.0
     while True:
         t += 0.02 * speed

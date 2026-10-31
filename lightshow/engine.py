@@ -5,12 +5,15 @@ Engine.apply(). It stops whatever is running, then either sets a persistent
 hardware mode and lets the thread idle, or starts stepping a software
 generator.
 
-Config lives at ~/.config/omarchy/lightshow.json and holds the current look.
-Colours are never stored: every look uses the Omarchy theme's palette.
+Config lives at ~/.config/omarchy/lightshow.json and holds the current look
+plus the colour settings: whether looks follow the Omarchy theme palette
+("theme", the default) or your own picks ("custom"), and the picks themselves,
+one list per effect. Switching back to "theme" keeps the picks for later.
 """
 
 import json
 import os
+import re
 import threading
 import time
 
@@ -27,7 +30,28 @@ DEFAULT_STATE = {
     "word": "OMARCHY",        # what the scroll effect spells
 }
 
-DEFAULT_CONFIG = {"current": dict(DEFAULT_STATE)}
+COLOR_SOURCES = ("theme", "custom")
+DEFAULT_COLORS = {"source": "theme", "effects": {}}
+MAX_COLORS = 8
+
+DEFAULT_CONFIG = {"current": dict(DEFAULT_STATE), "colors": dict(DEFAULT_COLORS)}
+
+
+def _clean_hex_list(v):
+    """Validate a list of '#rrggbb' strings; drop anything else."""
+    out = []
+    for c in v if isinstance(v, list) else []:
+        if isinstance(c, str) and re.fullmatch(r"#?[0-9a-fA-F]{6}", c.strip()):
+            out.append("#" + c.strip().lstrip("#").lower())
+    return out[:MAX_COLORS]
+
+
+def _clean_colors(v):
+    v = v if isinstance(v, dict) else {}
+    src = v.get("source") if v.get("source") in COLOR_SOURCES else "theme"
+    fx = v.get("effects") if isinstance(v.get("effects"), dict) else {}
+    return {"source": src,
+            "effects": {str(k): l for k, l in ((k, _clean_hex_list(x)) for k, x in fx.items()) if l}}
 
 
 def _load():
@@ -39,7 +63,8 @@ def _load():
     # Only the current look survives. Older configs carried favourites, day/night
     # profiles, a schedule and custom colours; all of that is gone (2026-09-15).
     cur = cfg.get("current") if isinstance(cfg.get("current"), dict) else {}
-    return {"current": {k: cur.get(k, v) for k, v in DEFAULT_STATE.items()}}
+    return {"current": {k: cur.get(k, v) for k, v in DEFAULT_STATE.items()},
+            "colors": _clean_colors(cfg.get("colors"))}
 
 
 def _save(cfg):
@@ -68,24 +93,70 @@ class Engine:
 
     # -- colours --------------------------------------------------------
 
-    def colors_for(self, _state=None):
-        """The palette every look uses: the Omarchy theme's, or the built-in
-        fallback when there is no theme to read."""
+    def theme_palette(self):
+        """The Omarchy theme's palette, or the built-in fallback."""
         return kbd.theme_colors() or list(kbd.FALLBACK)
+
+    def custom_hex(self, name):
+        """The picks for one effect as hex: saved ones, else a starting set
+        (the effect's own fixed colours, or the theme palette)."""
+        saved = self.cfg["colors"]["effects"].get(name)
+        if saved:
+            return list(saved)
+        if name in effects.FIXED_DEFAULTS:
+            return list(effects.FIXED_DEFAULTS[name])
+        n = effects.color_slots(name)[0] or 1
+        return [rgb_hex(c) for c in self.theme_palette()[:n]]
+
+    def colors_for(self, name=None):
+        """The colours a look uses: the theme palette, or this effect's picks."""
+        name = name or self.cfg["current"]["effect"]
+        if self.cfg["colors"]["source"] == "custom":
+            return [kbd.hex_rgb(c) for c in self.custom_hex(name)]
+        return self.theme_palette()
+
+    def _set_colors(self, state):
+        """Colour keys an apply() may carry. Returns True if anything changed.
+
+        color_source:  "theme" | "custom"
+        effect_colors: {"<effect>": ["#rrggbb", ...]}   (empty list = forget picks)
+        """
+        changed = False
+        col = self.cfg["colors"]
+        src = state.get("color_source")
+        if src is not None:
+            if src not in COLOR_SOURCES:
+                raise ValueError(f"color_source must be one of {COLOR_SOURCES}")
+            changed |= col["source"] != src
+            col["source"] = src
+        fx = state.get("effect_colors")
+        if isinstance(fx, dict):
+            for name, lst in fx.items():
+                if name not in effects.COLOR_SLOTS and name not in effects.SOFTWARE:
+                    raise ValueError(f"unknown effect '{name}'")
+                clean = _clean_hex_list(lst)
+                if clean:
+                    col["effects"][name] = clean
+                else:
+                    col["effects"].pop(name, None)
+                changed = True
+        return changed
 
     # -- control --------------------------------------------------------
 
     def apply(self, state, save=True):
         """Switch to a new look. Stops whatever was running first.
 
-        Colours always come from the Omarchy theme (Fred, 2026-09-15: "no
-        matter what I select or pick, always the theme colours"). Anything a
-        caller sends about colours is ignored.
+        Colours come from the Omarchy theme by default. With color_source set
+        to "custom", each effect uses its own picks (effect_colors) instead;
+        both keys may ride along on any apply(). See _set_colors().
         """
+        colors_changed = self._set_colors(state)
         merged = dict(self.cfg["current"])
         merged.update({k: v for k, v in state.items() if k in DEFAULT_STATE})
         name = merged["effect"]
-        colors = self.colors_for()
+        colors = self.colors_for(name)
+        custom = self.cfg["colors"]["source"] == "custom"
         speed = float(merged.get("speed", 1.0))
         bright = float(merged.get("brightness", 1.0))
 
@@ -96,6 +167,8 @@ class Engine:
                 kwargs = {}
                 if name == "scroll":
                     kwargs["word"] = merged.get("word") or "OMARCHY"
+                if custom and name in effects.FIXED:
+                    kwargs["custom"] = True
                 gen = fn(colors, speed=speed, **kwargs)
                 self._bright = bright
                 self._gen = gen
@@ -109,7 +182,7 @@ class Engine:
                 self.last_frame = [cols[i % len(cols)] for i in range(4)]
 
         self.cfg["current"] = merged
-        if save:
+        if save or colors_changed:
             _save(self.cfg)
         return merged
 
@@ -170,7 +243,9 @@ class Engine:
             if tick % 4:
                 continue
             try:
-                now = tuple(kbd.theme_colors())
+                # The colours the current look would use: with custom picks a
+                # theme change resolves to the same thing and nothing restarts.
+                now = tuple(self.colors_for())
             except Exception:
                 continue
             if last is not None and now != last:
@@ -197,6 +272,11 @@ class Engine:
         return {
             "current": cur,
             "resolved_colors": [rgb_hex(c) for c in self.colors_for()],
+            "color_source": self.cfg["colors"]["source"],
+            "theme_colors": [rgb_hex(c) for c in self.theme_palette()],
+            "custom_colors": {n: self.custom_hex(n) for n in effects.COLOR_SLOTS},
+            "custom_saved": sorted(self.cfg["colors"]["effects"]),
+            "color_slots": {n: {"max": m, "hint": h} for n, (m, h) in effects.COLOR_SLOTS.items()},
             "frame": self.frame(),
             "theme": kbd.theme_name(),
             "theme_palette": {k: rgb_hex(v) for k, v in kbd.load_palette().items()},

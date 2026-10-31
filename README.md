@@ -319,9 +319,31 @@ works no matter how the theme changed, including a hand-edited file.
 Dark background colours are filtered out deliberately: on a keyboard they read
 as "off" and make an animation look broken rather than subtle.
 
-There are no custom colours. Every effect, favourite and profile uses the
-current theme's palette, so the keyboards always match the desktop. Not on
-Omarchy? LightShow falls back to a built-in palette.
+By default every effect uses the current theme's palette, so the keyboards
+always match the desktop. Not on Omarchy? LightShow falls back to a built-in
+palette.
+
+### Custom colours
+
+Prefer your own colours? Flip the **Theme | Custom** switch in the Colours panel
+of the app. In Custom mode each effect has its own colour list, edited on a
+hue/saturation wheel with a brightness slider and a hex field. The panel shows
+as many slots as the effect uses (one for `static`, two for `police`, up to
+eight for `cycle`), and changes reach the keyboard as you drag. Effects with a
+fixed look (`ember`, `matrix`, `police`, `vapor`) take your colours too in
+Custom mode; `rainbow` stays full-spectrum.
+
+Switching back to Theme keeps your picks, so you can flip between the two:
+
+    lightshow colors            # show the current mode
+    lightshow colors custom     # use your picks
+    lightshow colors theme      # follow the theme again
+    lightshow colors toggle     # handy on a keybinding
+
+Picks are stored with the current look in `~/.config/omarchy/lightshow.json`.
+Over the API, any `/api/apply` body may carry `"color_source": "theme"|"custom"`
+and `"effect_colors": {"<effect>": ["#rrggbb", ...]}` (an empty list forgets an
+effect's picks).
 
 ---
 
