@@ -19,8 +19,8 @@
     color:var(--fg); font:14px/1.5 "JetBrains Mono","Fira Code",ui-monospace,monospace;
     height:100vh; overflow:hidden; padding:14px 16px;
   }
-  /* The page never scrolls. One column: the colours on the keys, the theme
-     palette they come from, and the effects. Nothing else to set. */
+  /* The page never scrolls on a wide screen: the colours on the keys, the theme
+     palette, then the effects beside the colour panel. Narrow screens stack. */
   .wrap{max-width:1400px;margin:0 auto;height:100%;display:flex;flex-direction:column;gap:12px}
   /* The Omarchy chamfer: a bevelled corner, used on every surface. */
   .cham{clip-path:polygon(var(--chamfer) 0,100% 0,100% calc(100% - var(--chamfer)),calc(100% - var(--chamfer)) 100%,0 100%,0 var(--chamfer))}
@@ -68,6 +68,37 @@
   .boards b{color:var(--fg);font-weight:600}
   .boards .warn{color:#e0af68}
   .fx:disabled{opacity:.35;cursor:not-allowed;transform:none;box-shadow:none}
+
+  /* effects + colour panel side by side; stacked (and scrolling) when narrow */
+  .main{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:12px;min-height:0;flex:1}
+  .main > section{overflow:auto}
+  @media (max-width:900px){
+    body{height:auto;overflow:auto}
+    .wrap{height:auto}
+    .main{grid-template-columns:1fr}
+  }
+  .seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line);margin-bottom:12px}
+  .seg button{background:var(--panel2);color:var(--dim);border:0;padding:8px;font:inherit;
+              letter-spacing:.12em;text-transform:uppercase;font-size:11px;cursor:pointer}
+  .seg button.on{background:linear-gradient(150deg,#1d2440,#171a26);color:var(--fg);
+                 box-shadow:inset 0 0 0 1px var(--accent)}
+  .ctitle{font-weight:700;letter-spacing:.06em;text-transform:uppercase;font-size:12px}
+  .chint{color:var(--dim);font-size:11px;margin:2px 0 10px}
+  .slots{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:8px}
+  .slot{width:30px;height:30px;border:1px solid #0006;cursor:pointer;padding:0}
+  .slot.sel{outline:2px solid var(--accent);outline-offset:2px}
+  .tools{display:flex;gap:6px;margin-bottom:10px}
+  .tools button{background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+                font:inherit;padding:3px 10px;cursor:pointer}
+  .tools button:disabled{opacity:.35;cursor:not-allowed}
+  .tools .sp{flex:1}
+  #wheel{display:block;margin:0 auto 10px;cursor:crosshair;touch-action:none}
+  #wheel.off{opacity:.35;cursor:not-allowed}
+  .vrow{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+  .vrow input{flex:1;accent-color:var(--accent)}
+  #hex{width:100%;background:var(--panel2);color:var(--fg);border:1px solid var(--line);
+       font:inherit;padding:5px 8px}
+  #hex:disabled,.vrow input:disabled{opacity:.35}
 </style>
 </head>
 <body>
@@ -97,10 +128,32 @@
     <div class="boards" id="boards"></div>
   </section>
 
-  <section class="cham">
-    <h2>Effects</h2>
-    <div class="grid" id="fx"></div>
-  </section>
+  <div class="main">
+    <section class="cham">
+      <h2>Effects</h2>
+      <div class="grid" id="fx"></div>
+    </section>
+
+    <section class="cham" id="colours">
+      <h2>Colours</h2>
+      <div class="seg">
+        <button id="srcTheme" title="Follow the theme palette">Theme</button>
+        <button id="srcCustom" title="Use your own colours, set per effect">Custom</button>
+      </div>
+      <div class="ctitle" id="ctitle"></div>
+      <div class="chint" id="chint"></div>
+      <div class="slots" id="slots"></div>
+      <div class="tools">
+        <button id="cAdd" title="Add a colour">+</button>
+        <button id="cDel" title="Remove the selected colour">−</button>
+        <span class="sp"></span>
+        <button id="cReset" title="Forget the picks for this effect">Reset</button>
+      </div>
+      <canvas id="wheel" width="220" height="220"></canvas>
+      <div class="vrow"><label>Brightness</label><input type="range" id="val" min="0" max="1" step="0.01"></div>
+      <input id="hex" maxlength="7" placeholder="#rrggbb" spellcheck="false">
+    </section>
+  </div>
 
 </div>
 
@@ -168,10 +221,169 @@ function render(){
     d.className = 'sw cham'; d.style.background = hex; d.title = name + ' ' + hex;
     pal.appendChild(d);
   });
-  $('themeNote').textContent = 'Every look uses ' + S.theme + "'s colours. Switch your Omarchy theme and both keyboards follow.";
+  const tn = (!S.theme || S.theme === 'unknown') ? 'the desktop theme' : S.theme;
+  $('themeNote').textContent = S.color_source === 'custom'
+    ? 'Using your picked colours; ' + tn + ' is on standby.'
+    : 'Every look uses ' + tn + "'s colours. Switch themes and the keyboard follows.";
 
   paintPreview(S.frame || S.resolved_colors);
+  renderColours();
 }
+
+// ---- colour panel ------------------------------------------------------
+// Theme | Custom for every effect; in Custom each effect has its own list,
+// edited on a hue/saturation wheel plus a brightness slider and hex field.
+
+const C = {effect: null, list: [], sel: 0, h: 0, s: 1, v: 1, dragging: false, timer: null};
+const WHEEL = 220, R = WHEEL / 2;
+
+function hex2rgb(h){ h = h.replace('#',''); return [0,2,4].map(i => parseInt(h.substr(i,2),16)); }
+function rgb2hex(c){ return '#' + c.map(x => Math.round(x).toString(16).padStart(2,'0')).join(''); }
+function hsv2rgb(h,s,v){
+  const i = Math.floor(h*6)%6, f = h*6-Math.floor(h*6), p=v*(1-s), q=v*(1-f*s), t=v*(1-(1-f)*s);
+  return [[v,t,p],[q,v,p],[p,v,t],[p,q,v],[t,p,v],[v,p,q]][i].map(x => x*255);
+}
+function rgb2hsv([r,g,b]){
+  r/=255; g/=255; b/=255;
+  const mx=Math.max(r,g,b), mn=Math.min(r,g,b), d=mx-mn;
+  let h=0;
+  if(d){ h = mx===r ? ((g-b)/d)%6 : mx===g ? (b-r)/d+2 : (r-g)/d+4; h/=6; if(h<0) h+=1; }
+  return [h, mx ? d/mx : 0, mx];
+}
+
+// The full-brightness wheel, rendered once.
+const wheelImg = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = WHEEL;
+  const x = c.getContext('2d'), img = x.createImageData(WHEEL, WHEEL);
+  for(let py=0; py<WHEEL; py++) for(let px=0; px<WHEEL; px++){
+    const dx = px+.5-R, dy = py+.5-R, d = Math.hypot(dx,dy), a = Math.max(0, Math.min(1, R-d));
+    if(a <= 0) continue;
+    let h = Math.atan2(-dy, dx) / (2*Math.PI); if(h < 0) h += 1;
+    const [r,g,b] = hsv2rgb(h, Math.min(1, d/R), 1), i = (py*WHEEL+px)*4;
+    img.data[i]=r; img.data[i+1]=g; img.data[i+2]=b; img.data[i+3]=a*255;
+  }
+  x.putImageData(img, 0, 0); return c;
+})();
+
+function editable(){
+  const slots = (S.color_slots||{})[local.effect] || {max: 8};
+  return S.color_source === 'custom' && slots.max > 0;
+}
+
+function drawWheel(){
+  const cv = $('wheel'), x = cv.getContext('2d');
+  x.clearRect(0,0,WHEEL,WHEEL);
+  x.drawImage(wheelImg, 0, 0);
+  if(C.v < 1){ x.beginPath(); x.arc(R,R,R,0,2*Math.PI); x.fillStyle = `rgba(0,0,0,${1-C.v})`; x.fill(); }
+  cv.classList.toggle('off', !editable());
+  if(!editable()) return;
+  const a = C.h*2*Math.PI, mx = R + Math.cos(a)*C.s*R, my = R - Math.sin(a)*C.s*R;
+  x.beginPath(); x.arc(mx, my, 7, 0, 2*Math.PI);
+  x.fillStyle = rgb2hex(hsv2rgb(C.h, C.s, C.v)); x.fill();
+  x.lineWidth = 2.5; x.strokeStyle = '#fff'; x.stroke();
+  x.lineWidth = 1; x.strokeStyle = '#000'; x.stroke();
+}
+
+function renderColours(force){
+  const name = local.effect, custom = S.color_source === 'custom';
+  const slots = (S.color_slots||{})[name] || {max: 8, hint: ''};
+  $('srcTheme').classList.toggle('on', !custom);
+  $('srcCustom').classList.toggle('on', custom);
+  // Mid-edit on the same effect: keep what is on screen, the server echo may lag.
+  if(force || name !== C.effect || !(C.dragging || C.timer)){
+    C.list = custom ? ((S.custom_colors||{})[name] || ['#ffffff']).slice()
+                    : (S.theme_colors||[]).slice(0, Math.max(1, slots.max));
+    if(name !== C.effect) C.sel = 0;
+    C.effect = name;
+  }
+  C.sel = Math.min(C.sel, Math.max(0, C.list.length-1));
+  const saved = (S.custom_saved||[]).includes(name);
+  $('ctitle').textContent = name;
+  $('chint').textContent = slots.max === 0 ? slots.hint
+    : custom ? slots.hint + (saved ? '  ·  saved' : '')
+    : slots.hint + '. Following the theme; switch to Custom to pick your own.';
+  const ed = editable();
+  $('cAdd').disabled = !ed || C.list.length >= slots.max;
+  $('cDel').disabled = !ed || C.list.length <= 1;
+  $('cReset').disabled = !ed || !saved;
+  $('val').disabled = $('hex').disabled = !ed;
+  const box = $('slots'); box.innerHTML = '';
+  if(slots.max > 0) C.list.forEach((hx, i) => {
+    const b = document.createElement('button');
+    b.className = 'slot cham' + (i === C.sel ? ' sel' : '');
+    b.style.background = hx; b.title = hx;
+    b.onclick = () => { C.sel = i; renderColours(); };
+    box.appendChild(b);
+  });
+  loadSelected();
+}
+
+function loadSelected(){
+  const hx = C.list[C.sel];
+  if(hx && !C.dragging){ [C.h, C.s, C.v] = rgb2hsv(hex2rgb(hx)); }
+  $('val').value = C.v;
+  if(document.activeElement !== $('hex')) $('hex').value = hx || '';
+  drawWheel();
+}
+
+function edited(rgb){
+  const hx = rgb2hex(rgb);
+  C.list[C.sel] = hx;
+  const el = $('slots').children[C.sel];
+  if(el){ el.style.background = hx; el.title = hx; }
+  if(document.activeElement !== $('hex')) $('hex').value = hx;
+  drawWheel();
+  if(!C.timer) C.timer = setTimeout(pushColours, 90);   // coalesce drags
+}
+
+function pushColours(){
+  C.timer = null;
+  const body = {effect_colors: {[C.effect]: C.list.slice()}};
+  api('/api/apply', body).then(r => api('/api/state')).then(s => { S = s; renderColours(); });
+}
+
+function pick(ev){
+  if(!editable()) return;
+  const rc = $('wheel').getBoundingClientRect();
+  const dx = (ev.clientX - rc.left) * WHEEL / rc.width - R, dy = (ev.clientY - rc.top) * WHEEL / rc.height - R;
+  C.h = Math.atan2(-dy, dx) / (2*Math.PI); if(C.h < 0) C.h += 1;
+  C.s = Math.min(1, Math.hypot(dx, dy) / R);
+  edited(hsv2rgb(C.h, C.s, C.v));
+}
+$('wheel').addEventListener('pointerdown', ev => {
+  if(!editable()) return;
+  C.dragging = true; $('wheel').setPointerCapture(ev.pointerId); pick(ev);
+});
+$('wheel').addEventListener('pointermove', ev => { if(C.dragging) pick(ev); });
+$('wheel').addEventListener('pointerup', () => { C.dragging = false; });
+$('wheel').addEventListener('pointercancel', () => { C.dragging = false; });
+$('val').addEventListener('input', ev => { C.v = +ev.target.value; edited(hsv2rgb(C.h, C.s, C.v)); });
+$('hex').addEventListener('change', ev => {
+  let t = ev.target.value.trim(); if(!t.startsWith('#')) t = '#' + t;
+  if(!/^#[0-9a-fA-F]{6}$/.test(t)) { ev.target.value = C.list[C.sel] || ''; return; }
+  [C.h, C.s, C.v] = rgb2hsv(hex2rgb(t)); $('val').value = C.v;
+  edited(hex2rgb(t));
+});
+$('cAdd').onclick = () => {
+  const [h,s,v] = rgb2hsv(hex2rgb(C.list[C.sel]));
+  C.list.push(rgb2hex(hsv2rgb((h+0.15)%1, s, v))); C.sel = C.list.length-1;
+  renderSlotsThenPush();
+};
+$('cDel').onclick = () => {
+  if(C.list.length <= 1) return;
+  C.list.splice(C.sel, 1); C.sel = Math.max(0, C.sel-1);
+  renderSlotsThenPush();
+};
+function renderSlotsThenPush(){ C.timer = 1; pushColours(); }
+$('cReset').onclick = () => {
+  api('/api/apply', {effect_colors: {[C.effect]: []}}).then(() => api('/api/state'))
+    .then(s => { S = s; renderColours(true); });
+};
+function setSource(src){
+  api('/api/apply', {color_source: src}).then(() => refresh());
+}
+$('srcTheme').onclick = () => setSource('theme');
+$('srcCustom').onclick = () => setSource('custom');
 
 // The preview mirrors the daemon: /api/frame is the last frame written to the
 // keys, polled a few times a second while the page has focus.
