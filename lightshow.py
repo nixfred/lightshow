@@ -7,11 +7,14 @@
     lightshow --port 9000     port for the web UI
     lightshow <effect>        apply an effect and exit (no server)
     lightshow list            list every effect
+    lightshow colors [theme|custom|toggle]
+                              follow the theme, or use your picked colours
 
 The one-shot forms still go through the engine, so a hardware effect keeps
 running after the process exits. A software effect needs the server, because
-something has to be alive to step the animation. Colours always come from the
-Omarchy theme; there is nothing to choose.
+something has to be alive to step the animation. Colours come from the Omarchy
+theme by default; `lightshow colors custom` switches to the colours picked per
+effect in the app.
 """
 
 import argparse
@@ -94,6 +97,26 @@ def main():
         print(f"theme  : {kbd.theme_name()}")
         print("palette: " + " ".join(kbd.rgb_hex(c) for c in kbd.theme_colors()))
         return
+
+    if args.action == "colors":
+        # Talk to the daemon when it is up (it owns the keyboard); else do it here.
+        from lightshow import remote
+        eng = remote.connect()
+        local = eng is None
+        if local:
+            eng = Engine()
+        cur = eng.snapshot().get("color_source", "theme")
+        want = args.arg or ""
+        if want == "toggle":
+            want = "custom" if cur == "theme" else "theme"
+        if want not in ("theme", "custom"):
+            print(f"colours: {cur}   (lightshow colors theme|custom|toggle)")
+            return 0 if not args.arg else 2
+        eng.apply({"color_source": want})
+        print(f"colours: {want}")
+        if local:
+            time.sleep(0.3)
+        return 0
 
     # one-shot forms
     if args.action in effects.HARDWARE:
