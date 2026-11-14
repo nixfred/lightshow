@@ -40,7 +40,17 @@ KNOWN = {
     "1462:1562": ("MSI Delta 15 (MS-1562)", "REPORTED"),
     "1462:1563": ("MSI Alpha 15/17 (MS-1563)", "REPORTED"),
     "1462:1564": ("MSI (MS-1564)", "REPORTED"),
+    "1462:1603": ("MSI Vector 16 HX (MS-1603, wide zone mask)", "VERIFIED"),
 }
+
+# Some controllers (1462:1603 on the Vector 16 HX) take a multi-byte zone mask:
+# the one-byte mask the 4-zone protocol sends only reaches the top-left keys.
+# Each logical zone bit maps to one mask byte; measured on a Vector 16 HX:
+#   byte 0  Fn row, number row and QWERTY row, left ~13 columns
+#   byte 1  Caps row Caps..F/G (middle-left)
+#   byte 2  G/H..Enter and the Shift + bottom rows through numpad 1-3 (right/bottom)
+#   byte 3  PrtScr/= /] end of the top rows and the top of the numpad (top-right)
+WIDE_MASK = {"1462:1603": 4}
 
 # Kept for the udev rule and for status output.
 VID, PID = "0DB0", "1801"
@@ -156,6 +166,8 @@ class Keyboard:
             ) from e
         self.node = node
         self._zone = None
+        ident = next((i for n, i, _ in scan_devices() if n == node), "")
+        self.mask_bytes = WIDE_MASK.get(ident, 1)
         from . import caps
         self.name = "MSI keyboard"
         # Four zone groups, streamed frames, and four effects the controller runs itself.
@@ -170,7 +182,12 @@ class Keyboard:
     def select(self, zone_mask: int):
         # The controller remembers the selection; skip redundant writes.
         if self._zone != zone_mask:
-            self._feature(bytes([0x02, 0x01, zone_mask]))
+            if self.mask_bytes > 1:
+                # logical zone bit i -> whole mask byte i
+                mask = bytes(0xFF if zone_mask & (1 << i) else 0 for i in range(self.mask_bytes))
+            else:
+                mask = bytes([zone_mask])
+            self._feature(bytes([0x02, 0x01]) + mask)
             self._zone = zone_mask
 
     def set(self, zone_mask, mode, keyframes, cycle_cs=100, wave_dir=WAVE_LTR):
