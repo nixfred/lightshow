@@ -39,6 +39,22 @@ byte 2 : mask   zone bitmask
 The controller remembers the selection, so repeated writes of the same mask can
 be skipped.
 
+**Wide mask (`1462:1603`, MSI Vector 16 HX).** Reported and measured by th3r00t on
+real hardware, not by this project. This controller takes a four-byte mask, `02 01 M0 M1 M2 M3`;
+the one-byte form only reaches the top-left keys. `FF FF FF FF` is the whole
+keyboard. Each byte lights one overlapping key group when set to `FF` alone:
+
+| byte | keys |
+|---|---|
+| 0 | Fn row, number row and QWERTY row, left ~13 columns |
+| 1 | Caps row, Caps to F/G |
+| 2 | G/H to Enter, plus the Shift and bottom rows through numpad 1-3 |
+| 3 | PrtScr, `=` and `]` at the end of the top rows, and the top of the numpad |
+
+LightShow maps its logical zone bit *i* to the whole of mask byte *i* for this ID
+(`WIDE_MASK` in `kbd.py`). The bits inside each byte are not mapped yet, so finer
+zones may exist. Every other ID gets the one-byte mask.
+
 ### 2. Mode and colour
 
 ```

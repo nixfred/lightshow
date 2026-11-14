@@ -39,6 +39,7 @@ If both are plugged in, LightShow drives both at once.
 | `0db0:1801` | MSI Crosshair 16 Max HX (MS-1801) | ✅ **Verified** — developed and tested on this |
 | `0db0:1606` | MSI Cyborg 15 (MS-1606) | 🟡 Reported — same packet format, untested here |
 | `0db0:1605` | MSI Vector A18 HX (MS-1605) | 🟡 Reported — untested here |
+| `1462:1603` | MSI Vector 16 HX (MS-1603) | ✅ **Verified by a contributor (th3r00t)** on real hardware — needs a 4-byte zone mask, which LightShow sends for this ID only. The four zones are broad key groups, so `gamer` and `codedark` light whole groups here. Not tested on this side |
 | `1462:1601` | MSI Katana 15 HX (MS-1565) | 🟡 Reported — untested here |
 | `1462:1562/3/4` | MSI Delta 15, Alpha 15/17 | 🟡 Reported — untested here |
 | anything else reporting `MysticLight` | unlisted MSI laptops | 🔵 Auto-detected, worth trying |
